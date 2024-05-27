@@ -1,19 +1,18 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: ipynb,py:percent
+#     formats: ipynb,py:light
 #     text_representation:
 #       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.14.4
+#       format_name: light
+#       format_version: '1.5'
+#       jupytext_version: 1.16.2
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
 
-# %% [markdown]
 # # Notation
 # $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
@@ -29,10 +28,9 @@
 # we still denote the collection of all $\ve x_i = x_i\in\mathbb R$ points with
 # $\ma X$ to keep the notation consistent with the slides.
 
-# %% [markdown]
 # # Imports, helpers, setup
 
-# %%
+# +
 # %matplotlib inline
 
 import math
@@ -98,8 +96,8 @@ def plot_samples(ax, X_pred, samples, label=None, **kwds):
 torch.set_default_dtype(torch.float64)
 
 torch.manual_seed(123)
+# -
 
-# %% [markdown]
 # # Generate toy 1D data
 #
 # Here we generate noisy 1D data `X_train`, `y_train` as well as an extended
@@ -109,7 +107,7 @@ torch.manual_seed(123)
 # show how the model uncertainty will behave there.
 
 
-# %%
+# +
 def generate_data(x, gaps=[[1, 3]], const=5):
     y = torch.sin(x) * torch.exp(-0.2 * x) + torch.randn(x.shape) * 0.1 + const
     msk = torch.tensor([True] * len(x))
@@ -130,8 +128,8 @@ print(f"{y_train.shape=}")
 print(f"{X_pred.shape=}")
 
 plt.scatter(X_train, y_train, marker="o", color="tab:blue")
+# -
 
-# %% [markdown]
 # # Define GP model
 #
 # We define the simplest possible textbook GP model using a Gaussian
@@ -153,7 +151,7 @@ plt.scatter(X_train, y_train, marker="o", color="tab:blue")
 # * $m(\ve x) = c$ = `model.mean_module.constant`
 
 
-# %%
+# +
 class ExactGPModel(gpytorch.models.ExactGP):
     """API:
 
@@ -179,17 +177,16 @@ class ExactGPModel(gpytorch.models.ExactGP):
 
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
 model = ExactGPModel(X_train, y_train, likelihood)
+# -
 
 
-# %%
 # Inspect the model
 print(model)
 
-# %%
 # Default start hyper params
 pprint(extract_model_params(model, raw=False))
 
-# %%
+# +
 # Set new start hyper params
 model.mean_module.constant = 3.0
 model.covar_module.base_kernel.lengthscale = 1.0
@@ -197,9 +194,9 @@ model.covar_module.outputscale = 1.0
 model.likelihood.noise_covar.noise = 0.1
 
 pprint(extract_model_params(model, raw=False))
+# -
 
 
-# %% [markdown]
 # # Sample from the GP prior
 #
 # We sample a number of functions $f_j, j=1,\ldots,M$ from the GP prior and
@@ -208,7 +205,7 @@ pprint(extract_model_params(model, raw=False))
 # c, \ma K)$. Each sampled vector $\pred{\ve y}\in\mathbb R^{N'}$ and the
 # covariance (kernel) matrix is $\ma K\in\mathbb R^{N'\times N'}$.
 
-# %%
+# +
 model.eval()
 likelihood.eval()
 
@@ -235,9 +232,9 @@ with torch.no_grad():
         label="confidence",
     )
     ax.legend()
+# -
 
 
-# %% [markdown]
 # Let's investigate the samples more closely. A constant mean $\ve m(\ma X) =
 # \ve c$ does *not* mean that each sampled vector $\pred{\ve y}$'s mean is
 # equal to $c$. Instead, we have that at each $\ve x_i$, the mean of
@@ -245,14 +242,12 @@ with torch.no_grad():
 # \approx c$ and for $M\rightarrow\infty$ it will be exactly $c$.
 #
 
-# %%
 # Look at the first 20 x points from M=10 samples
 print(f"{f_samples.shape=}")
 print(f"{f_samples.mean(axis=0)[:20]=}")
 print(f"{f_samples.mean(axis=0).mean()=}")
 print(f"{f_samples.mean(axis=0).std()=}")
 
-# %%
 # Take more samples, the means should get closer to c
 f_samples = pri_f.sample(sample_shape=torch.Size((M * 200,)))
 print(f"{f_samples.shape=}")
@@ -260,7 +255,6 @@ print(f"{f_samples.mean(axis=0)[:20]=}")
 print(f"{f_samples.mean(axis=0).mean()=}")
 print(f"{f_samples.mean(axis=0).std()=}")
 
-# %% [markdown]
 # # Fit GP to data: optimize hyper params
 #
 # In each step of the optimizer, we condition on the training data (e.g. do
@@ -274,7 +268,7 @@ print(f"{f_samples.mean(axis=0).std()=}")
 # Observe how all hyper params converge. In particular, note that the constant
 # mean $m(\ve x)=c$ converges to the `const` value in `generate_data()`.
 
-# %%
+# +
 # Train mode
 model.train()
 likelihood.train()
@@ -302,11 +296,11 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
     ax.plot(p_lst)
     ax.set_title(p_name)
     ax.set_xlabel("iterations")
+# -
 
 
-# %% [markdown]
 # # Run prediction
-
+#
 # We show "noiseless" (left: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma)}$) vs.
 # "noisy" (right: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma
 # I_N)}$) predictions, where $\ma\Sigma\equiv\cov(\ve f_*)$ is the posterior
@@ -319,7 +313,7 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
 # https://elcorto.github.io/gp_playground/content/gp_pred_comp/notebook_plot.html
 # for details.
 
-# %%
+# +
 # Evaluation (predictive posterior) mode
 model.eval()
 likelihood.eval()
