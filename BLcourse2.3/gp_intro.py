@@ -16,8 +16,11 @@
 # # Notation
 # $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
-# $\newcommand{\pred}[1]{\widehat{#1}}$
+# $\newcommand{\pred}[1]{\rm{#1}}$
+# $\newcommand{\predve}[1]{\mathbf{#1}}$
 # $\newcommand{\cov}{\mathrm{cov}}$
+# $\newcommand{\test}[1]{#1_*}$
+# $\newcommand{\testtest}[1]{#1_{**}}$
 #
 # Vector $\ve a\in\mathbb R^n$ or $\mathbb R^{n\times 1}$, so "column" vector.
 # Matrix $\ma A\in\mathbb R^{n\times m}$. Design matrix with input vectors $\ve
@@ -136,10 +139,10 @@ plt.scatter(X_train, y_train, marker="o", color="tab:blue")
 # likelihood. The kernel is the squared exponential kernel with a scaling
 # factor.
 #
-# $$\kappa(\ve x_i, \ve x_j) = \sigma_f\,\exp\left(-\frac{\lVert\ve x_i - \ve x_j\rVert_2^2}{2\,\ell^2}\right)$$
+# $$\kappa(\ve x_i, \ve x_j) = s\,\exp\left(-\frac{\lVert\ve x_i - \ve x_j\rVert_2^2}{2\,\ell^2}\right)$$
 #
 # This makes two hyper params, namely the length scale $\ell$ and the scaling
-# $\sigma_f$. The latter is implemented by wrapping the `RBFKernel` with
+# $s$. The latter is implemented by wrapping the `RBFKernel` with
 # `ScaleKernel`.
 #
 # In addition, we define a constant mean via `ConstantMean`. Finally we have
@@ -147,7 +150,7 @@ plt.scatter(X_train, y_train, marker="o", color="tab:blue")
 #
 # * $\ell$ = `model.covar_module.base_kernel.lengthscale`
 # * $\sigma_n^2$ = `model.likelihood.noise_covar.noise`
-# * $\sigma_f$ = `model.covar_module.outputscale`
+# * $s$ = `model.covar_module.outputscale`
 # * $m(\ve x) = c$ = `model.mean_module.constant`
 
 
@@ -200,10 +203,10 @@ pprint(extract_model_params(model, raw=False))
 # # Sample from the GP prior
 #
 # We sample a number of functions $f_j, j=1,\ldots,M$ from the GP prior and
-# evaluate them at all $\ma X$ = `X_pred` points, of which we have $N'=200$. So
-# we effectively generate samples from $p(\pred{\ve y}|\ma X) = \mathcal N(\ve
-# c, \ma K)$. Each sampled vector $\pred{\ve y}\in\mathbb R^{N'}$ and the
-# covariance (kernel) matrix is $\ma K\in\mathbb R^{N'\times N'}$.
+# evaluate them at all $\ma X$ = `X_pred` points, of which we have $N=200$. So
+# we effectively generate samples from $p(\predve f|\ma X) = \mathcal N(\ve
+# c, \ma K)$. Each sampled vector $\predve f\in\mathbb R^{N}$ and the
+# covariance (kernel) matrix is $\ma K\in\mathbb R^{N\times N}$.
 
 # +
 model.eval()
@@ -236,7 +239,7 @@ with torch.no_grad():
 
 
 # Let's investigate the samples more closely. A constant mean $\ve m(\ma X) =
-# \ve c$ does *not* mean that each sampled vector $\pred{\ve y}$'s mean is
+# \ve c$ does *not* mean that each sampled vector $\predve f$'s mean is
 # equal to $c$. Instead, we have that at each $\ve x_i$, the mean of
 # *all* sampled functions is the same, so $\frac{1}{M}\sum_{j=1}^M f_j(\ve x_i)
 # \approx c$ and for $M\rightarrow\infty$ it will be exactly $c$.
@@ -303,11 +306,9 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
 #
 # We show "noiseless" (left: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma)}$) vs.
 # "noisy" (right: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma
-# I_N)}$) predictions, where $\ma\Sigma\equiv\cov(\ve f_*)$ is the posterior
-# predictive covariance matrix from R&W 2006 eq. 2.24 with $\ma K = K(X,X)$,
-# $\ma K'=K(X_*, X)$ and $\ma K''=K(X_*, X_*)$, so
+# I_N)}$) predictions with
 #
-# $$\ma\Sigma = \ma K'' - \ma K'\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\ma K'^\top$$
+# $$\ma\Sigma = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$$
 #
 # See
 # https://elcorto.github.io/gp_playground/content/gp_pred_comp/notebook_plot.html
