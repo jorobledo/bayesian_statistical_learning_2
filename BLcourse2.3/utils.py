@@ -1,4 +1,4 @@
-import gpytorch
+from matplotlib import pyplot as plt
 
 
 def extract_model_params(model, raw=False) -> dict:
@@ -28,6 +28,12 @@ def extract_model_params(model, raw=False) -> dict:
         return out
 
 
+def fig_ax_3d():
+    fig = plt.figure()
+    ax = fig.add_subplot(projection="3d")
+    return fig, ax
+
+
 def plot_samples(ax, X_pred, samples, label=None, **kwds):
     plot_kwds = dict(color="tab:green", alpha=0.3)
     plot_kwds.update(kwds)
@@ -37,26 +43,3 @@ def plot_samples(ax, X_pred, samples, label=None, **kwds):
     else:
         ax.plot(X_pred, samples[0, :], **plot_kwds, label=label)
         ax.plot(X_pred, samples[1:, :].T, **plot_kwds, label="_")
-
-
-class ExactGPModel(gpytorch.models.ExactGP):
-    """API:
-
-    model.forward()             prior                   f_pred
-    model()                     posterior               f_pred
-
-    likelihood(model.forward()) prior with noise        y_pred
-    likelihood(model())         posterior with noise    y_pred
-    """
-
-    def __init__(self, X_train, y_train, likelihood):
-        super().__init__(X_train, y_train, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel()
-        )
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)

@@ -33,11 +33,11 @@
 
 # # Imports, helpers, setup
 
-# +
-# %matplotlib widget
-# -
+# ##%matplotlib notebook
+# ##%matplotlib widget
+# %matplotlib inline
 
-# -
+# +
 import math
 from collections import defaultdict
 from pprint import pprint
@@ -47,7 +47,7 @@ import gpytorch
 from matplotlib import pyplot as plt
 from matplotlib import is_interactive
 
-from utils import extract_model_params, plot_samples, ExactGPModel
+from utils import extract_model_params, plot_samples
 
 
 # Default float32 results in slightly noisy prior samples. Less so with
@@ -121,6 +121,30 @@ plt.scatter(X_train, y_train, marker="o", color="tab:blue")
 
 
 # +
+class ExactGPModel(gpytorch.models.ExactGP):
+    """API:
+
+    model.forward()             prior                   f_pred
+    model()                     posterior               f_pred
+
+    likelihood(model.forward()) prior with noise        y_pred
+    likelihood(model())         posterior with noise    y_pred
+    """
+
+    def __init__(self, X_train, y_train, likelihood):
+        super().__init__(X_train, y_train, likelihood)
+        self.mean_module = gpytorch.means.ConstantMean()
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.RBFKernel()
+        )
+
+    def forward(self, x):
+        """The prior, defined in terms of the mean and covariance function."""
+        mean_x = self.mean_module(x)
+        covar_x = self.covar_module(x)
+        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
+
+
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
 model = ExactGPModel(X_train, y_train, likelihood)
 # -
@@ -236,7 +260,6 @@ for ii in range(n_iter):
     history["loss"].append(loss.item())
 # -
 
-# +
 # Plot hyper params and loss (neg. log marginal likelihood) convergence
 ncols = len(history)
 fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 5, 5))
@@ -244,12 +267,9 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
     ax.plot(p_lst)
     ax.set_title(p_name)
     ax.set_xlabel("iterations")
-# -
 
-# +
 # Values of optimized hyper params
 pprint(extract_model_params(model, raw=False))
-# -
 
 # # Run prediction
 #
@@ -337,3 +357,4 @@ with torch.no_grad():
 # When running as script
 if not is_interactive():
     plt.show()
+# -
