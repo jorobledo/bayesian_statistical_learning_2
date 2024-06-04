@@ -13,10 +13,9 @@
 #     name: python3
 # ---
 
-# +
-# %matplotlib inline
+# %matplotlib notebook
 
-import math
+# +
 from collections import defaultdict
 from pprint import pprint
 
@@ -24,59 +23,17 @@ import torch
 import gpytorch
 from matplotlib import pyplot as plt
 from matplotlib import is_interactive
+##from mpl_toolkits.mplot3d import Axes3D
 
 
-def extract_model_params(model, raw=False) -> dict:
-    """Helper to convert model.named_parameters() to dict.
-
-    With raw=True, use
-        foo.bar.raw_param
-    else
-        foo.bar.param
-
-    See https://docs.gpytorch.ai/en/stable/examples/00_Basic_Usage/Hyperparameters.html#Raw-vs-Actual-Parameters
-    """
-    if raw:
-        return dict(
-            (p_name, p_val.item())
-            for p_name, p_val in model.named_parameters()
-        )
-    else:
-        out = dict()
-        # p_name = 'covar_module.base_kernel.raw_lengthscale'. Access
-        # model.covar_module.base_kernel.lengthscale (w/o the raw_)
-        for p_name, p_val in model.named_parameters():
-            # Yes, eval() hack. Sorry.
-            p_name = p_name.replace(".raw_", ".")
-            p_val = eval(f"model.{p_name}")
-            out[p_name] = p_val.item()
-        return out
-
-
-# Default float32 results in slightly noisy prior samples. Less so with
-# float64. We get a warning with both
-#   .../lib/python3.11/site-packages/linear_operator/utils/cholesky.py:40:
-#       NumericalWarning: A not p.d., added jitter of 1.0e-08 to the diagonal
-# but the noise is smaller w/ float64. Reason must be that the `sample()`
-# method [1] calls `rsample()` [2] which performs a Cholesky decomposition of
-# the covariance matrix. The default in
-# np.random.default_rng().multivariate_normal() is method="svd", which is
-# slower but seemingly a bit more stable.
-#
-# [1] https://docs.gpytorch.ai/en/stable/distributions.html#gpytorch.distributions.MultivariateNormal.sample
-# [2] https://docs.gpytorch.ai/en/stable/distributions.html#gpytorch.distributions.MultivariateNormal.rsample
-torch.set_default_dtype(torch.float64)
-
-torch.manual_seed(123)
+from utils import extract_model_params, plot_samples, ExactGPModel
 # -
 
+
+torch.set_default_dtype(torch.float64)
+torch.manual_seed(123)
+
 # # Generate toy 2D data
-#
-# Here we generate noisy 1D data `X_train`, `y_train` as well as an extended
-# x-axis `X_pred` which we use later for prediction also outside of the data
-# range (extrapolation). The data has a constant offset `const` which we use to
-# test learning a GP mean function $m(\ve x)$. We create a gap in the data to
-# show how the model uncertainty will behave there.
 
 
 # +
@@ -140,37 +97,6 @@ class MexicanHat(SurfaceData):
         return y * torch.cos(r) / r**2 - y * torch.sin(r) / r**3.0
 
 
-# -
-
-# # Define GP model
-
-
-# +
-class ExactGPModel(gpytorch.models.ExactGP):
-    """API:
-
-    model.forward()             prior                   f_pred
-    model()                     posterior               f_pred
-
-    likelihood(model.forward()) prior with noise        y_pred
-    likelihood(model())         posterior with noise    y_pred
-    """
-
-    def __init__(self, X_train, y_train, likelihood):
-        super().__init__(X_train, y_train, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(
-            gpytorch.kernels.RBFKernel()
-        )
-
-    def forward(self, x):
-        mean_x = self.mean_module(x)
-        covar_x = self.covar_module(x)
-        return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
-
-
-# -
-
 # +
 data_train = MexicanHat(
     xlim=[-15, 5], ylim=[-15, 25], nx=20, ny=20, mode="rand"
@@ -179,18 +105,24 @@ data_pred = MexicanHat(
     xlim=[-15, 5], ylim=[-15, 25], nx=100, ny=100, mode="grid"
 )
 
-
+# train inputs
 X_train = data_train.X
-f_train = data_train.z
-##y_train = f_train + torch.randn(size=f_train.shape) / 20
-y_train = f_train
 
-mask = (X_train[:, 0] < -5) & (X_train[:, 1] < 0)
-# apply mask
-X_train = X_train[~mask, :]
-y_train = y_train[~mask]
-
+# inputs for prediction and plotting
 X_pred = data_pred.X
+
+# noise-free train data
+##y_train = data_train.z
+
+# noisy train data
+y_train = data_train.z + torch.randn(size=data_train.z.shape) / 20
+
+# +
+# Cut out part of the train data to create out-of-distribution predictions
+##mask = (X_train[:, 0] < -5) & (X_train[:, 1] < 0)
+##X_train = X_train[~mask, :]
+##y_train = y_train[~mask]
+# -
 
 fig = plt.figure()
 ax = fig.add_subplot(projection="3d")
@@ -206,12 +138,11 @@ ax.scatter(
 )
 ax.set_xlabel("X_0")
 ax.set_ylabel("X_1")
-# -
 
-# +
+# # Define GP model
+
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
 model = ExactGPModel(X_train, y_train, likelihood)
-# -
 
 
 # Inspect the model
@@ -228,8 +159,6 @@ model.covar_module.outputscale = 1.0
 model.likelihood.noise_covar.noise = 0.1
 
 pprint(extract_model_params(model, raw=False))
-# -
-
 
 # +
 # Train mode
@@ -251,6 +180,7 @@ for ii in range(n_iter):
     for p_name, p_val in extract_model_params(model).items():
         history[p_name].append(p_val)
     history["loss"].append(loss.item())
+# -
 
 ncols = len(history)
 fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 5, 5))
@@ -258,8 +188,9 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
     ax.plot(p_lst)
     ax.set_title(p_name)
     ax.set_xlabel("iterations")
-# -
 
+# Values of optimized hyper params
+pprint(extract_model_params(model, raw=False))
 
 # # Run prediction
 
@@ -316,7 +247,6 @@ for ax, c in zip(axs, [c0, c1]):
     ax.set_ylabel("X_1")
     ax.scatter(x=X_train[:, 0], y=X_train[:, 1], color="white", alpha=0.2)
     fig.colorbar(c, ax=ax)
-# -
 
 # When running as script
 if not is_interactive():
