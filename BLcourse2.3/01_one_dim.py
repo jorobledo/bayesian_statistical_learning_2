@@ -410,7 +410,9 @@ with torch.no_grad():
         if ii == 1:
             ax.legend()
     ax_sigmas.legend()
+# -
 
+# +
 # When running as script
 if not is_interactive():
     plt.show()

@@ -370,6 +370,8 @@ ax.set_zlim((contour_z, zlim[1] + abs(contour_z)))
 ax.contourf(data_pred.XG, data_pred.YG, y_std, zdir="z", offset=contour_z)
 # -
 
+# +
 # When running as script
 if not is_interactive():
     plt.show()
+# -
