@@ -310,9 +310,11 @@ for ax, (p_name, p_lst) in zip(axs, history.items()):
 #
 # $$\ma\Sigma = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$$
 #
-# See
-# https://elcorto.github.io/gp_playground/content/gp_pred_comp/notebook_plot.html
-# for details.
+# We find that $\ma\Sigma$ reflects behavior we would like to see from
+# epistemic uncertainty -- it is high when we have no data
+# (out-of-distribution). But this alone isn't the whole story. We need to add
+# the estimated noise level $\sigma_n^2$ in order for the confidence band to
+# cover the data.
 
 # +
 # Evaluation (predictive posterior) mode
