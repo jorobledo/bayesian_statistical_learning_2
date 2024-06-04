@@ -27,12 +27,11 @@ import torch
 import gpytorch
 from matplotlib import pyplot as plt
 from matplotlib import is_interactive
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 
 from sklearn.preprocessing import StandardScaler
 
-from utils import extract_model_params, plot_samples, fig_ax_3d
+from utils import extract_model_params, fig_ax_3d
 # -
 
 
