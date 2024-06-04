@@ -225,11 +225,68 @@ print(f"{f_samples.mean(axis=0)[:20]=}")
 print(f"{f_samples.mean(axis=0).mean()=}")
 print(f"{f_samples.mean(axis=0).std()=}")
 
+# # GP posterior predictive distribution with fixed hyper params
+#
+# Now we calculate the posterior predictive distribution $p(\test{\predve
+# f}|\test{\ma X}, \ma X, \ve y)$, i.e. we condition on the train data (Bayesian
+# inference).
+#
+# We use the fixed hyper param values defined above. In particular, since
+# $\sigma_n^2$ = `model.likelihood.noise_covar.noise` is > 0, we have a
+# regression setting.
+
+# +
+# Evaluation (predictive posterior) mode
+model.eval()
+likelihood.eval()
+
+with torch.no_grad():
+    M = 10
+    post_pred_f = model(X_pred)
+
+    fig, ax = plt.subplots()
+    f_mean = post_pred_f.mean
+    f_samples = post_pred_f.sample(sample_shape=torch.Size((M,)))
+    f_std = post_pred_f.stddev
+    lower = f_mean - 2 * f_std
+    upper = f_mean + 2 * f_std
+    ax.plot(
+        X_train.numpy(),
+        y_train.numpy(),
+        "o",
+        label="data",
+        color="tab:blue",
+    )
+    ax.plot(
+        X_pred.numpy(),
+        f_mean.numpy(),
+        label="mean",
+        color="tab:red",
+        lw=2,
+    )
+    ax.fill_between(
+        X_pred.numpy(),
+        lower.numpy(),
+        upper.numpy(),
+        label="confidence",
+        color="tab:orange",
+        alpha=0.3,
+    )
+    y_min = y_train.min()
+    y_max = y_train.max()
+    y_span = y_max - y_min
+    ax.set_ylim([y_min - 0.3 * y_span, y_max + 0.3 * y_span])
+    plot_samples(ax, X_pred, f_samples, label="posterior pred. samples")
+    ax.legend()
+# -
+
+
 # # Fit GP to data: optimize hyper params
 #
 # In each step of the optimizer, we condition on the training data (e.g. do
-# Bayesian inference) to calculate the weight posterior for the current values
-# of the hyper params.
+# Bayesian inference) to calculate the posterior predictive distribution for
+# the current values of the hyper params. We iterate until the log marginal
+# likelihood is converged.
 #
 # We use a simplistic PyTorch-style hand written train loop without convergence
 # control, so make sure to use enough `n_iter` and eyeball-check that the loss
@@ -291,6 +348,7 @@ model.eval()
 likelihood.eval()
 
 with torch.no_grad():
+    M = 10
     post_pred_f = model(X_pred)
     post_pred_y = likelihood(model(X_pred))
 
@@ -300,9 +358,8 @@ with torch.no_grad():
         zip(axs, [post_pred_f, post_pred_y], ["f", "y"])
     ):
         yf_mean = post_pred.mean
-        yf_samples = post_pred.sample(sample_shape=torch.Size((10,)))
+        yf_samples = post_pred.sample(sample_shape=torch.Size((M,)))
 
-        ##lower, upper = post_pred.confidence_region()
         yf_std = post_pred.stddev
         lower = yf_mean - 2 * yf_std
         upper = yf_mean + 2 * yf_std
