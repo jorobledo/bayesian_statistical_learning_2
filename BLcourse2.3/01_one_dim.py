@@ -34,8 +34,8 @@
 # # Imports, helpers, setup
 
 # ##%matplotlib notebook
-# ##%matplotlib widget
-# %matplotlib inline
+# %matplotlib widget
+# ##%matplotlib inline
 
 # +
 import math

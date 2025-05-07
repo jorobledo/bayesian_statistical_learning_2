@@ -14,8 +14,8 @@
 # ---
 
 # +
-# %matplotlib notebook
-# ##%matplotlib widget
+# ##%matplotlib notebook
+# %matplotlib widget
 # ##%matplotlib inline
 # -
 
