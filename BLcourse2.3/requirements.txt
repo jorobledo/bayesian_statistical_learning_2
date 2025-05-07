@@ -1,0 +1,33 @@
+# ----------------------------------------------------------------------------
+# Required to at least run the py scripts
+# ----------------------------------------------------------------------------
+torch
+gpytorch
+pyro-ppl
+matplotlib
+scikit-learn
+
+# ----------------------------------------------------------------------------
+# Jupyter stuff, this must be present in the used Jupyter kernel on a hosted
+# service like https://jupyter.jsc.fz-juelich.de
+# ----------------------------------------------------------------------------
+
+# Since we use paired notebooks. This is used for local dev, not really needed
+# on a hosted service, but still useful to avoid confusing warnings (jupytext
+# extension failed loading).
+jupytext
+
+# for %matplotlib widget
+ipympl
+
+# ----------------------------------------------------------------------------
+# Jupyter Lab, when running locally
+# ----------------------------------------------------------------------------
+
+# Jupyter Lab
+jupyter
+
+# or Jupyter notebook is also fine
+##notebook
+
+# vim:syn=sh
