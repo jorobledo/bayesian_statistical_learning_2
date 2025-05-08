@@ -236,7 +236,7 @@ for ii in range(n_iter):
     loss.backward()
     optimizer.step()
     if (ii + 1) % 10 == 0:
-        print(f"iter {ii+1}/{n_iter}, {loss=:.3f}")
+        print(f"iter {ii + 1}/{n_iter}, {loss=:.3f}")
     for p_name, p_val in extract_model_params(model).items():
         history[p_name].append(p_val)
     history["loss"].append(loss.item())
