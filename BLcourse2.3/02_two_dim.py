@@ -136,7 +136,9 @@ if use_noise:
     # noisy train data
     noise_std = 0.2
     noise_dist = torch.distributions.Normal(loc=0, scale=noise_std)
-    y_train = data_train.z + noise_dist.sample_n(len(data_train.z))
+    y_train = data_train.z + noise_dist.sample(
+        sample_shape=(len(data_train.z),)
+    )
 else:
     # noise-free train data
     noise_std = 0
