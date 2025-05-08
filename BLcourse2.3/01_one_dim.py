@@ -6,11 +6,11 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.16.2
+#       jupytext_version: 1.17.1
 #   kernelspec:
-#     display_name: Python 3 (ipykernel)
+#     display_name: bayes-ml-course
 #     language: python
-#     name: python3
+#     name: bayes-ml-course
 # ---
 
 # # Notation
@@ -437,8 +437,6 @@ with torch.no_grad():
     ax_sigmas.legend()
 # -
 
-# +
 # When running as script
 if not is_interactive():
     plt.show()
-# -
