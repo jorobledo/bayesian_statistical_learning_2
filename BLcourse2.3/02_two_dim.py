@@ -13,6 +13,8 @@
 #     name: python3
 # ---
 
+# In this notebook, we use a GP to fit a 2D data set.
+
 # +
 # ##%matplotlib notebook
 # %matplotlib widget
@@ -112,6 +114,8 @@ X_pred = data_pred.X
 
 # # Exercise 1
 
+# Keep the settings below and explore the notebook till the end first.
+
 # +
 use_noise = False
 use_gap = False
@@ -119,15 +123,19 @@ use_gap = False
 
 # # Exercise 2
 
+# First complete the notebook as is, then come back here.
+
 # +
-##use_noise = True
-##use_gap = False
+##use_noise = False
+##use_gap = True
 # -
 
 # # Exercise 3
 
+# First complete the notebook with Exercise 2, then come back here.
+
 # +
-##use_noise = False
+##use_noise = True
 ##use_gap = True
 # -
 
@@ -146,7 +154,8 @@ else:
 # -
 
 # +
-# Cut out part of the train data to create out-of-distribution predictions
+# Cut out part of the train data to create out-of-distribution predictions.
+# Same as the "gaps" we created in the 1D case.
 
 if use_gap:
     mask = (X_train[:, 0] > 0) & (X_train[:, 1] < 0)
@@ -227,10 +236,10 @@ pprint(extract_model_params(model, raw=False))
 model.train()
 likelihood.train()
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.2)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.15)
 loss_func = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
 
-n_iter = 300
+n_iter = 400
 history = defaultdict(list)
 for ii in range(n_iter):
     optimizer.zero_grad()
@@ -286,11 +295,14 @@ with torch.no_grad():
 assert (post_pred_f.mean == post_pred_y.mean).all()
 # -
 
+# When `use_noise=False`, then the GP's prediction is an almost pefect
+# reconstruction of the ground truth function (in-distribution, so where we
+# have data).
 
 # # Plot difference to ground truth and uncertainty
 
 # +
-ncols = 3
+ncols = 4
 fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 7, 5))
 
 vmax = post_pred_y.stddev.max()
@@ -307,27 +319,42 @@ cs.append(
 )
 axs[0].set_title("|y_pred - y_true|")
 
+f_std = post_pred_f.stddev.reshape((data_pred.nx, data_pred.ny))
+y_std = post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny))
+
 cs.append(
     axs[1].contourf(
         data_pred.XG,
         data_pred.YG,
-        post_pred_f.stddev.reshape((data_pred.nx, data_pred.ny)),
+        f_std,
         vmin=0,
         vmax=vmax,
     )
 )
-axs[1].set_title("f_std (epistemic)")
+axs[1].set_title("epistemic: f_std")
 
 cs.append(
     axs[2].contourf(
         data_pred.XG,
         data_pred.YG,
-        post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny)),
+        y_std,
         vmin=0,
         vmax=vmax,
     )
 )
-axs[2].set_title("y_std (epistemic + aleatoric)")
+axs[2].set_title("total: y_std")
+
+cs.append(
+    axs[3].contourf(
+        data_pred.XG,
+        data_pred.YG,
+        y_std - f_std,
+        vmin=0,
+        cmap="plasma",
+        ##vmax=vmax,
+    )
+)
+axs[3].set_title("aleatoric: y_std - f_std")
 
 for ax, c in zip(axs, cs):
     ax.set_xlabel("X_0")
@@ -336,8 +363,7 @@ for ax, c in zip(axs, cs):
     fig.colorbar(c, ax=ax)
 # -
 
-
-# # Let's check the learned noise
+# ## Let's check the learned noise
 
 # +
 # Target noise to learn
@@ -356,7 +382,50 @@ print(
 )
 # -
 
-# # Plot confidence bands
+# # Observations
+
+# We have the following terms:
+#
+# * epistemic: `f_std` = $\sqrt{\mathrm{diag}\,\ma\Sigma}$
+# * total: `y_std` = $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N)}$
+# * aleatoric: we have two ways of representing it
+#   * from the likelihood: $\sigma_n$
+#   * for plotting: we use `y_std` - `f_std`, this is $\neq \sigma_n$ because of the $\sqrt{\cdot}$
+#     above
+#
+# We can make the following observations:
+#
+# * Exercise 1: `use_noise=False`, `use_gap=False`
+#   * The epistemic uncertainty `f_std` is a good indicator
+#     of the (small) differences between model prediction and ground truth
+#   * The learned variance $\sigma_n^2$, and hence the aleatoric uncertainty is near zero, which makes sense for noise-free data
+# * Exercise 2: `use_noise=False`, `use_gap=True`
+#   * When faced with out-of-distribution (OOD) data, the epistemic `f_std` clearly shows where the
+#     model will make wrong (less trustworthy) predictions
+# * Exercise 3: `use_noise=True`, `use_gap=True`
+#   * in-distribution (where we have data)
+#     * The distinction between
+#       epistemic and aleatoric in the way we define it is less meaningful, hence, `f_std` doesn't
+#       correlate well with `y_pred - y_true`. The reason is that the noise
+#       $\sigma_n$ shows up in two parts: (a) in the equation of $\ma\Sigma$
+#       itself, so the "epistemic" uncertainty `f_std` = $\sqrt{\mathrm{diag}\,\ma\Sigma}$
+#       is bigger just because we have noise (regression) and (b) we add
+#       it in $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N)}$
+#       to get the total `y_std`
+#     * We learn the value of `noise_std` ($\sigma_n$) quite well and add **its square** as a constant ($\ma\Sigma + \sigma_n^2\,\ma I_N$).
+#       The `y_std` plot looks like the `f_std` one, but shifted by a constant. But this is not the case because
+#       we compare standard deviations and
+#       not variances, hence `y_std` - `f_std` is not constant, and in
+#       particular $\neq \sigma_n$, but both are in the same numerical range
+#       (0.15 vs. 0.2).
+#   * out-of-distribution: `f_std` (epistemic) dominates
+
+# Exercises
+#
+# Go back up, switch on the settings for Exercise 2 and re-run the notebook.
+# Same with Exercise 3.
+
+# # Bonus: plot confidence bands
 
 # +
 y_mean = post_pred_y.mean.reshape((data_pred.nx, data_pred.ny))
