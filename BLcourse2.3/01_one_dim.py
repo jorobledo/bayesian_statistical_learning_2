@@ -46,6 +46,7 @@ import torch
 import gpytorch
 from matplotlib import pyplot as plt
 from matplotlib import is_interactive
+import numpy as np
 
 from utils import extract_model_params, plot_samples
 
@@ -81,8 +82,11 @@ def ground_truth(x, const):
     return torch.sin(x) * torch.exp(-0.2 * x) + const
 
 
-def generate_data(x, gaps=[[1, 3]], const=5):
-    y = ground_truth(x, const=const) + torch.randn(x.shape) * 0.1
+def generate_data(x, gaps=[[1, 3]], const=None, noise_std=None):
+    noise_dist = torch.distributions.Normal(loc=0, scale=noise_std)
+    y = ground_truth(x, const=const) + noise_dist.sample(
+        sample_shape=(len(x),)
+    )
     msk = torch.tensor([True] * len(x))
     if gaps is not None:
         for g in gaps:
@@ -91,8 +95,11 @@ def generate_data(x, gaps=[[1, 3]], const=5):
 
 
 const = 5.0
+noise_std = 0.1
 x = torch.linspace(0, 4 * math.pi, 100)
-X_train, y_train, y_gt_train = generate_data(x, gaps=[[6, 10]], const=const)
+X_train, y_train, y_gt_train = generate_data(
+    x, gaps=[[6, 10]], const=const, noise_std=noise_std
+)
 X_pred = torch.linspace(
     X_train[0] - 2, X_train[-1] + 2, 200, requires_grad=False
 )
@@ -121,7 +128,7 @@ ax.legend()
 # `ScaleKernel`.
 #
 # In addition, we define a constant mean via `ConstantMean`. Finally we have
-# the likelihood noise $\sigma_n^2$. So in total we have 4 hyper params.
+# the likelihood variance $\sigma_n^2$. So in total we have 4 hyper params.
 #
 # * $\ell$ = `model.covar_module.base_kernel.lengthscale`
 # * $\sigma_n^2$ = `model.likelihood.noise_covar.noise`
@@ -359,12 +366,6 @@ pprint(extract_model_params(model, raw=False))
 # I_N)}$) predictions with
 #
 # $$\ma\Sigma = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$$
-#
-# We find that $\ma\Sigma$ reflects behavior we would like to see from
-# epistemic uncertainty -- it is high when we have no data
-# (out-of-distribution). But this alone isn't the whole story. We need to add
-# the estimated noise level $\sigma_n^2$ in order for the confidence band to
-# cover the data.
 
 # +
 # Evaluation (predictive posterior) mode
@@ -442,6 +443,38 @@ with torch.no_grad():
         if ii == 1:
             ax.legend()
     ax_sigmas.legend()
+# -
+
+# We find that $\ma\Sigma$ reflects behavior we would like to see from
+# epistemic uncertainty -- it is high when we have no data
+# (out-of-distribution). But this alone isn't the whole story. We need to add
+# the estimated likelihood variance $\sigma_n^2$ in order for the confidence
+# band to cover the data -- this turns the estimated total uncertainty into a
+# *calibrated* uncertainty.
+
+# # Let's check the learned noise
+#
+# We compare the target data noise (`noise_std`) to the learned GP noise, in
+# the form of the likelihood *standard deviation* $\sigma_n$. The latter is
+# equal to the $\sqrt{\cdot}$ of `likelihood.noise_covar.noise` and can also be
+# calculated via $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N) -
+# \mathrm{diag}(\ma\Sigma)}$.
+
+# +
+# Target noise to learn
+print("data noise:", noise_std)
+
+# The two below must be the same
+print(
+    "learned noise:",
+    (post_pred_y.stddev**2 - post_pred_f.stddev**2).mean().sqrt().item(),
+)
+print(
+    "learned noise:",
+    np.sqrt(
+        extract_model_params(model, raw=False)["likelihood.noise_covar.noise"]
+    ),
+)
 # -
 
 # When running as script
