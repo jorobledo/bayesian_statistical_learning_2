@@ -336,16 +336,24 @@ for ax, c in zip(axs, cs):
     fig.colorbar(c, ax=ax)
 # -
 
-# # Check learned noise
+
+# # Let's check the learned noise
 
 # +
-print((post_pred_y.stddev**2 - post_pred_f.stddev**2).mean().sqrt())
+# Target noise to learn
+print("data noise:", noise_std)
+
+# The two below must be the same
 print(
+    "learned noise:",
+    (post_pred_y.stddev**2 - post_pred_f.stddev**2).mean().sqrt().item(),
+)
+print(
+    "learned noise:",
     np.sqrt(
         extract_model_params(model, raw=False)["likelihood.noise_covar.noise"]
-    )
+    ),
 )
-print(noise_std)
 # -
 
 # # Plot confidence bands
