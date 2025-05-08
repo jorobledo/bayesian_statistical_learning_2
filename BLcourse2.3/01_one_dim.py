@@ -170,7 +170,7 @@ pprint(extract_model_params(model, raw=False))
 model.mean_module.constant = 3.0
 model.covar_module.base_kernel.lengthscale = 1.0
 model.covar_module.outputscale = 1.0
-model.likelihood.noise_covar.noise = 0.1
+model.likelihood.noise_covar.noise = 1e-3
 
 pprint(extract_model_params(model, raw=False))
 # -
