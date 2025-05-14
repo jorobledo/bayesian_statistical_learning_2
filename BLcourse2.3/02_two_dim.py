@@ -386,8 +386,8 @@ print(
 
 # We have the following terms:
 #
-# * epistemic: `f_std` = $\sqrt{\mathrm{diag}\,\ma\Sigma}$
-# * total: `y_std` = $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N)}$
+# * epistemic: `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$
+# * total: `y_std` = $\sqrt{\diag(\test{\ma\Sigma} + \sigma_n^2\,\ma I_N)}$
 # * aleatoric: we have two ways of representing it
 #   * from the likelihood: $\sigma_n$
 #   * for plotting: we use `y_std` - `f_std`, this is $\neq \sigma_n$ because of the $\sqrt{\cdot}$
@@ -398,26 +398,29 @@ print(
 # * Exercise 1: `use_noise=False`, `use_gap=False`
 #   * The epistemic uncertainty `f_std` is a good indicator
 #     of the (small) differences between model prediction and ground truth
-#   * The learned variance $\sigma_n^2$, and hence the aleatoric uncertainty is near zero, which makes sense for noise-free data
+#   * The learned variance $\sigma_n^2$, and hence the aleatoric uncertainty is
+#     near zero, which makes sense for noise-free data
 # * Exercise 2: `use_noise=False`, `use_gap=True`
-#   * When faced with out-of-distribution (OOD) data, the epistemic `f_std` clearly shows where the
-#     model will make wrong (less trustworthy) predictions
+#   * When faced with out-of-distribution (OOD) data, the epistemic `f_std`
+#     clearly shows where the model will make wrong (less trustworthy)
+#     predictions
 # * Exercise 3: `use_noise=True`, `use_gap=True`
 #   * in-distribution (where we have data)
 #     * The distinction between
-#       epistemic and aleatoric in the way we define it is less meaningful, hence, `f_std` doesn't
-#       correlate well with `y_pred - y_true`. The reason is that the noise
-#       $\sigma_n$ shows up in two parts: (a) in the equation of $\ma\Sigma$
-#       itself, so the "epistemic" uncertainty `f_std` = $\sqrt{\mathrm{diag}\,\ma\Sigma}$
-#       is bigger just because we have noise (regression) and (b) we add
-#       it in $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N)}$
-#       to get the total `y_std`
-#     * We learn the value of `noise_std` ($\sigma_n$) quite well and add **its square** as a constant ($\ma\Sigma + \sigma_n^2\,\ma I_N$).
-#       The `y_std` plot looks like the `f_std` one, but shifted by a constant. But this is not the case because
-#       we compare standard deviations and
-#       not variances, hence `y_std` - `f_std` is not constant, and in
-#       particular $\neq \sigma_n$, but both are in the same numerical range
-#       (0.15 vs. 0.2).
+#       epistemic and aleatoric in the way we define it is less meaningful,
+#       hence, `f_std` doesn't correlate well with `y_pred - y_true`. The
+#       reason is that the noise $\sigma_n$ shows up in two parts: (a) in the
+#       equation of $\test{\ma\Sigma}$ itself, so the "epistemic" uncertainty
+#       `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$ is bigger just because we have
+#       noise (regression) and (b) we add it in $\sqrt{\diag(\test{\ma\Sigma} +
+#       \sigma_n^2\,\ma I_N)}$ to get the total `y_std`
+#     * We learn the value of `noise_std` ($\sigma_n$) quite well and add **its
+#       square** as a constant ($\test{\ma\Sigma} + \sigma_n^2\,\ma I_N$). The
+#       `y_std` plot looks like the `f_std` one, but shifted by a constant. But
+#       this is not the case because we compare standard deviations and not
+#       variances, hence `y_std` - `f_std` is not constant, and in particular
+#       $\neq \sigma_n$, but both are in the same numerical range (0.15 vs.
+#       0.2).
 #   * out-of-distribution: `f_std` (epistemic) dominates
 
 # Exercises

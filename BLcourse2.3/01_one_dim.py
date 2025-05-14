@@ -18,9 +18,10 @@
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
 # $\newcommand{\pred}[1]{\rm{#1}}$
 # $\newcommand{\predve}[1]{\mathbf{#1}}$
-# $\newcommand{\cov}{\mathrm{cov}}$
 # $\newcommand{\test}[1]{#1_*}$
 # $\newcommand{\testtest}[1]{#1_{**}}$
+# $\DeclareMathOperator{\diag}{diag}$
+# $\DeclareMathOperator{\cov}{cov}$
 #
 # Vector $\ve a\in\mathbb R^n$ or $\mathbb R^{n\times 1}$, so "column" vector.
 # Matrix $\ma A\in\mathbb R^{n\times m}$. Design matrix with input vectors $\ve
@@ -185,11 +186,16 @@ pprint(extract_model_params(model, raw=False))
 
 # # Sample from the GP prior
 #
-# We sample a number of functions $f_j, j=1,\ldots,M$ from the GP prior and
+# We sample a number of functions $f_m, m=1,\ldots,M$ from the GP prior and
 # evaluate them at all $\ma X$ = `X_pred` points, of which we have $N=200$. So
 # we effectively generate samples from $p(\predve f|\ma X) = \mathcal N(\ve
-# c, \ma K)$. Each sampled vector $\predve f\in\mathbb R^{N}$ and the
-# covariance (kernel) matrix is $\ma K\in\mathbb R^{N\times N}$.
+# c, \ma K)$. Each sampled vector $\predve f\in\mathbb R^{N}$ represents a
+# sampled *function* $f$ evaluated the $N=200$ points in $\ma X$. The
+# covariance (kernel) matrix is $\ma K\in\mathbb R^{N\times N}$. Its diagonal
+# $\diag\ma K$ = `f_std**2` represents the variance at each point on the $x$-axis.
+# This is what we plot as "confidence band" `f_mean` $\pm$ `2 * f_std`.
+# The off-diagonal elements represent the correlation between different points
+# $K_{ij} = \cov[f(\ve x_i), f(\ve x_j)]$.
 
 # +
 model.eval()
@@ -226,7 +232,7 @@ with torch.no_grad():
 # constant mean $\ve m(\ma X) = \ve c$ does *not* mean that each sampled vector
 # $\predve f$'s mean is equal to $c$. Instead, we have that at each $\ve x_i$,
 # the mean of *all* sampled functions is the same, so $\frac{1}{M}\sum_{j=1}^M
-# f_j(\ve x_i) \approx c$ and for $M\rightarrow\infty$ it will be exactly $c$.
+# f_m(\ve x_i) \approx c$ and for $M\rightarrow\infty$ it will be exactly $c$.
 #
 
 # Look at the first 20 x points from M=10 samples
@@ -245,7 +251,8 @@ print(f"{f_samples.mean(axis=0).std()=}")
 # # GP posterior predictive distribution with fixed hyper params
 #
 # Now we calculate the posterior predictive distribution $p(\test{\predve
-# f}|\test{\ma X}, \ma X, \ve y)$, i.e. we condition on the train data (Bayesian
+# f}|\test{\ma X}, \ma X, \ve y) = \mathcal N(\test{\ve\mu}, \test{\ma\Sigma})$,
+# i.e. we condition on the train data (Bayesian
 # inference).
 #
 # We use the fixed hyper param values defined above. In particular, since
@@ -361,11 +368,14 @@ pprint(extract_model_params(model, raw=False))
 
 # # Run prediction
 #
-# We show "noiseless" (left: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma)}$) vs.
-# "noisy" (right: $\sigma = \sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma
-# I_N)}$) predictions with
+# We run prediction with two variants of the posterior predictive distribution:
+# using either only the epistemic uncertainty or using the total uncertainty.
 #
-# $$\ma\Sigma = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$$
+# * epistemic: $p(\test{\predve f}|\test{\ma X}, \ma X, \ve y) =
+#   \mathcal N(\test{\ve\mu}, \test{\ma\Sigma})$ = `post_pred_f` with
+#   $\test{\ma\Sigma} = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$
+# * total: $p(\test{\predve y}|\test{\ma X}, \ma X, \ve y) =
+#   \mathcal N(\test{\ve\mu}, \test{\ma\Sigma} + \sigma_n^2\,\ma I_N))$ = `post_pred_y`
 
 # +
 # Evaluation (predictive posterior) mode
@@ -379,8 +389,13 @@ with torch.no_grad():
 
     fig, axs = plt.subplots(ncols=2, figsize=(12, 5))
     fig_sigmas, ax_sigmas = plt.subplots()
-    for ii, (ax, post_pred, name) in enumerate(
-        zip(axs, [post_pred_f, post_pred_y], ["f", "y"])
+    for ii, (ax, post_pred, name, title) in enumerate(
+        zip(
+            axs,
+            [post_pred_f, post_pred_y],
+            ["f", "y"],
+            ["epistemic uncertainty", "total uncertainty"],
+        )
     ):
         yf_mean = post_pred.mean
         yf_samples = post_pred.sample(sample_shape=torch.Size((M,)))
@@ -418,19 +433,20 @@ with torch.no_grad():
             color="tab:orange",
             alpha=0.3,
         )
+        ax.set_title(f"confidence = {title}")
         if name == "f":
-            sigma_label = r"$\pm 2\sqrt{\mathrm{diag}(\Sigma)}$"
+            sigma_label = r"epistemic: $\pm 2\sqrt{\mathrm{diag}(\Sigma_*)}$"
             zorder = 1
         else:
             sigma_label = (
-                r"$\pm 2\sqrt{\mathrm{diag}(\Sigma + \sigma_n^2\,I)}$"
+                r"total: $\pm 2\sqrt{\mathrm{diag}(\Sigma_* + \sigma_n^2\,I)}$"
             )
             zorder = 0
         ax_sigmas.fill_between(
             X_pred.numpy(),
             lower.numpy(),
             upper.numpy(),
-            label="confidence " + sigma_label,
+            label=sigma_label,
             color="tab:orange" if name == "f" else "tab:blue",
             alpha=0.5,
             zorder=zorder,
@@ -442,10 +458,11 @@ with torch.no_grad():
         plot_samples(ax, X_pred, yf_samples, label="posterior pred. samples")
         if ii == 1:
             ax.legend()
+    ax_sigmas.set_title("total vs. epistemic uncertainty")
     ax_sigmas.legend()
 # -
 
-# We find that $\ma\Sigma$ reflects behavior we would like to see from
+# We find that $\test{\ma\Sigma}$ reflects behavior we would like to see from
 # epistemic uncertainty -- it is high when we have no data
 # (out-of-distribution). But this alone isn't the whole story. We need to add
 # the estimated likelihood variance $\sigma_n^2$ in order for the confidence
@@ -457,8 +474,8 @@ with torch.no_grad():
 # We compare the target data noise (`noise_std`) to the learned GP noise, in
 # the form of the likelihood *standard deviation* $\sigma_n$. The latter is
 # equal to the $\sqrt{\cdot}$ of `likelihood.noise_covar.noise` and can also be
-# calculated via $\sqrt{\mathrm{diag}(\ma\Sigma + \sigma_n^2\,\ma I_N) -
-# \mathrm{diag}(\ma\Sigma)}$.
+# calculated via $\sqrt{\diag(\test{\ma\Sigma} + \sigma_n^2\,\ma I_N) -
+# \diag(\test{\ma\Sigma}})$.
 
 # +
 # Target noise to learn
