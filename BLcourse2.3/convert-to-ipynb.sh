@@ -4,7 +4,7 @@
 # --update below.
 nbstripout --keep-id *.ipynb
 
-for fn in 0*dim.py; do
+for fn in $(ls -1 | grep -E '[0-9]+.+\.py'); do
     # --update keeps call IDs -> smaller diffs
     jupytext --to ipynb --update $fn
 done
