@@ -14,6 +14,15 @@
 # ---
 
 # In this notebook, we use a GP to fit a 2D data set.
+# $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
+# $\newcommand{\ma}[1]{\mathbf{#1}}$
+# $\newcommand{\pred}[1]{\rm{#1}}$
+# $\newcommand{\predve}[1]{\mathbf{#1}}$
+# $\newcommand{\test}[1]{#1_*}$
+# $\newcommand{\testtest}[1]{#1_{**}}$
+# $\DeclareMathOperator{\diag}{diag}$
+# $\DeclareMathOperator{\cov}{cov}$
+#
 
 # +
 # ##%matplotlib notebook
