@@ -188,7 +188,7 @@ pprint(extract_model_params(model, raw=False))
 #
 # We sample a number of functions $f_m, m=1,\ldots,M$ from the GP prior and
 # evaluate them at all $\ma X$ = `X_pred` points, of which we have $N=200$. So
-# we effectively generate samples from $p(\predve f|\ma X) = \mathcal N(\ve
+# we effectively generate samples from `pri_f` =  $p(\predve f|\ma X) = \mathcal N(\ve
 # c, \ma K)$. Each sampled vector $\predve f\in\mathbb R^{N}$ represents a
 # sampled *function* $f$ evaluated the $N=200$ points in $\ma X$. The
 # covariance (kernel) matrix is $\ma K\in\mathbb R^{N\times N}$. Its diagonal
@@ -387,7 +387,7 @@ with torch.no_grad():
     post_pred_f = model(X_pred)
     post_pred_y = likelihood(model(X_pred))
 
-    fig, axs = plt.subplots(ncols=2, figsize=(12, 5))
+    fig, axs = plt.subplots(ncols=2, figsize=(12, 5), sharex=True, sharey=True)
     fig_sigmas, ax_sigmas = plt.subplots()
     for ii, (ax, post_pred, name, title) in enumerate(
         zip(
