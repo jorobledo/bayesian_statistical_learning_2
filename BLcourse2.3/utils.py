@@ -2,7 +2,7 @@ from matplotlib import pyplot as plt
 import torch
 
 
-def extract_model_params(model, raw=False, try_item=True) -> dict:
+def extract_model_params(model, raw=False, try_item=False) -> dict:
     """Helper to convert model.named_parameters() to dict.
 
     With raw=True, use
