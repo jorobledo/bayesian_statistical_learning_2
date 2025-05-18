@@ -32,6 +32,14 @@
 # we still denote the collection of all $\ve x_i = x_i\in\mathbb R$ points with
 # $\ma X$ to keep the notation consistent with the slides.
 
+
+# # About
+#
+# In this notebook, we explore the material presented in [the
+# slides](https://doi.org/10.6084/m9.figshare.25988176) with code, using the
+# [gpytorch](https://gpytorch.ai) library. We cover exact GP inference and
+# hyper parameter optimization using the marginal likelihood.
+
 # # Imports, helpers, setup
 
 # ##%matplotlib notebook

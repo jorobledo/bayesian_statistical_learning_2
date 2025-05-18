@@ -13,7 +13,13 @@
 #     name: python3
 # ---
 
-# In this notebook, we use a GP to fit a 2D data set.
+# # About
+#
+# In this notebook, we use a GP to fit a 2D data set. We use the same ExactGP
+# machinery as in the 1D case and show how GPs can be used for 2D interpolation
+# (when data is free of noise) or regression (noisy data). Think of this as a
+# toy geospatial data setting. Actually, in geostatistics, Gaussian process
+# regression is known as [Kriging](https://en.wikipedia.org/wiki/Kriging).
 # $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
 # $\newcommand{\pred}[1]{\rm{#1}}$
@@ -50,6 +56,13 @@ torch.set_default_dtype(torch.float64)
 torch.manual_seed(123)
 
 # # Generate toy 2D data
+#
+# Our ground truth function is $f(\ve x) = \sin(r) / r$ with $\ve x =
+# [x_0,x_1] \in\mathbb R^2$ and the radial distance
+# $r=\sqrt{\ve x^\top\,\ve x}$, also known as "Mexican hat" function, which is a
+# radial wave-like pattern which decays with distance from the center $\ve
+# x=\ve 0$. We generate data by random sampling 2D points $\ve x_i$ and calculating
+# $y_i = f(\ve x_i)$, optionally adding Gaussian noise further down.
 
 
 class MexicanHat:
@@ -304,11 +317,15 @@ with torch.no_grad():
 assert (post_pred_f.mean == post_pred_y.mean).all()
 # -
 
-# When `use_noise=False`, then the GP's prediction is an almost pefect
+# When `use_noise=False`, then the GP's prediction is an almost perfect
 # reconstruction of the ground truth function (in-distribution, so where we
-# have data).
+# have data). While 3D plots are fun, they are not optimal for judging how well
+# the GP model represents the ground truth function.
 
 # # Plot difference to ground truth and uncertainty
+#
+# Let's use contour plots to visualize the difference between GP prediction and
+# ground truth, as well as epistemic, total and aleatoric uncertainty.
 
 # +
 ncols = 4
@@ -432,7 +449,7 @@ print(
 #       0.2).
 #   * out-of-distribution: `f_std` (epistemic) dominates
 
-# Exercises
+# # Exercises
 #
 # Go back up, switch on the settings for Exercise 2 and re-run the notebook.
 # Same with Exercise 3.

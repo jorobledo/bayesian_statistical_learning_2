@@ -13,9 +13,12 @@
 #     name: bayes-ml-course
 # ---
 
-# In this notebook, we replace the ExactGP inference by using SVI (stochastic
-# variational inference).
+# # About
 #
+# In this notebook, we replace the ExactGP inference and log marginal
+# likelihood optimization by using sparse stochastic variational inference.
+# This serves as an example of the many methods `gpytorch` offers to make GPs
+# scale to large data sets.
 # $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
 # $\newcommand{\pred}[1]{\rm{#1}}$
@@ -43,16 +46,20 @@ from matplotlib import is_interactive
 import numpy as np
 from torch.utils.data import TensorDataset, DataLoader
 
-
 from utils import extract_model_params, plot_samples
 
 
 torch.set_default_dtype(torch.float64)
-
 torch.manual_seed(123)
 # -
 
 # # Generate toy 1D data
+#
+# Now we generate 10x more points as in the ExactGP case, still the inference
+# won't be much slower (exact GPs scale roughly as $N^3$). Note that the data we
+# use here is still tiny (1000 points is easy even for exact GPs), so the
+# method's usefulness cannot be fully exploited in our example
+# -- also we don't even use a GPU yet :).
 
 
 # +
@@ -94,25 +101,42 @@ print(f"{X_pred.shape=}")
 # -
 
 # # Define GP model
+#
+# The model follows [this
+# example](https://docs.gpytorch.ai/en/stable/examples/04_Variational_and_Approximate_GPs/SVGP_Regression_CUDA.html)
+# based on [Hensman et al., "Scalable Variational Gaussian Process Classification",
+# 2015](https://proceedings.mlr.press/v38/hensman15.html). The model is
+# "sparse" since it works with a set of *inducing* points $(\ma Z, \ve u),
+# \ve u=f(\ma Z)$ which is much smaller than the train data $(\ma X, \ve y)$.
+#
+# We have the same hyper parameters as before
+#
+# * $\ell$ = `model.covar_module.base_kernel.lengthscale`
+# * $\sigma_n^2$ = `likelihood.noise_covar.noise`
+# * $s$ = `model.covar_module.outputscale`
+# * $m(\ve x) = c$ = `model.mean_module.constant`
+#
+# plus additional ones, introduced by the approximations used:
+#
+# * the learnable inducing points $\ma Z$ for the variational distribution
+#   $q_{\ve\psi}(\ve u)$
+# * learnable parameters of the variational distribution $q_{\ve\psi}(\ve u)=\mathcal N(\ve m_u, \ma S)$: the
+#   variational mean $\ve m_u$ and covariance $\ma S$ in form a lower triangular
+#   matrix $\ma L$ such that $\ma S=\ma L\,\ma L^\top$
+
 
 # +
 class ApproxGPModel(gpytorch.models.ApproximateGP):
-    """API:
-
-    model.forward()             prior                   f_pred
-    model()                     posterior               f_pred
-
-    likelihood(model.forward()) prior with noise        y_pred
-    likelihood(model())         posterior with noise    y_pred
-    """
-
-    def __init__(self, X_ind):
+    def __init__(self, Z):
+        # Approximate inducing value posterior q(u), u = f(Z), Z = inducing
+        # points (subset of X_train)
         variational_distribution = (
-            gpytorch.variational.CholeskyVariationalDistribution(X_ind.size(0))
+            gpytorch.variational.CholeskyVariationalDistribution(Z.size(0))
         )
+        # Compute q(f(X)) from q(u)
         variational_strategy = gpytorch.variational.VariationalStrategy(
             self,
-            X_ind,
+            Z,
             variational_distribution,
             learn_inducing_locations=False,
         )
@@ -123,7 +147,6 @@ class ApproxGPModel(gpytorch.models.ApproximateGP):
         )
 
     def forward(self, x):
-        """The prior, defined in terms of the mean and covariance function."""
         mean_x = self.mean_module(x)
         covar_x = self.covar_module(x)
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
@@ -132,9 +155,10 @@ class ApproxGPModel(gpytorch.models.ApproximateGP):
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
 
 n_train = len(X_train)
+# Start values for inducing points Z, use 10% random sub-sample of X_train.
 ind_points_fraction = 0.1
-ind_idxs = torch.randperm(n_train)[:int(n_train * ind_points_fraction)]
-model = ApproxGPModel(X_ind=X_train[ind_idxs])
+ind_idxs = torch.randperm(n_train)[: int(n_train * ind_points_fraction)]
+model = ApproxGPModel(Z=X_train[ind_idxs])
 # -
 
 
@@ -157,14 +181,34 @@ model.mean_module.constant = 3.0
 model.covar_module.base_kernel.lengthscale = 1.0
 model.covar_module.outputscale = 1.0
 likelihood.noise_covar.noise = 0.3
-
-##print("model params:")
-##pprint(extract_model_params(model, raw=False, try_item=False))
-##print("likelihood params:")
-##pprint(extract_model_params(likelihood, raw=False, try_item=False))
 # -
 
 # # Fit GP to data: optimize hyper params
+#
+# Now we optimize the GP hyper parameters by doing a GP-specific variational inference (VI),
+# where we optimize not the log marginal likelihood (ExactGP case),
+# but an ELBO (evidence lower bound) objective
+#
+# $$
+# \max_\ve\zeta\left(\mathbb E_{q_{\ve\psi}(\ve u)}\left[\ln p(\ve y|\ve u) \right] -
+# D_{\text{KL}}(q_{\ve\psi}(\ve u)\Vert p(\ve u))\right)
+# $$
+#
+# with respect to
+#
+# $$\ve\zeta = [\ell, \sigma_n^2, s, c, \ve\psi] $$
+#
+# with
+#
+# $$\ve\psi = [\ve m_u, \ma Z, \ma L]$$
+#
+# the parameters of the variational distribution $q_{\ve\psi}(\ve u)$.
+#
+# In addition, we perform a stochastic
+# optimization by using a deep learning type mini-batch loop, hence
+# "stochastic" variational inference (SVI). The latter speeds up the
+# optimization since we only look at a fraction of data per optimizer step to
+# calculate an approximate loss gradient (`loss.backward()`).
 
 # +
 # Train mode
