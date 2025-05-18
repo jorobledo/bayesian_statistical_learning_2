@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.16.2
+#       jupytext_version: 1.17.1
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -29,11 +29,9 @@
 # $\DeclareMathOperator{\diag}{diag}$
 # $\DeclareMathOperator{\cov}{cov}$
 
-# +
 # ##%matplotlib notebook
 # %matplotlib widget
 # ##%matplotlib inline
-# -
 
 # +
 from collections import defaultdict
@@ -137,10 +135,8 @@ X_pred = data_pred.X
 
 # Keep the settings below and explore the notebook till the end first.
 
-# +
 use_noise = False
 use_gap = False
-# -
 
 # # Exercise 2
 
@@ -160,7 +156,6 @@ use_gap = False
 ##use_gap = True
 # -
 
-# +
 if use_noise:
     # noisy train data
     noise_std = 0.2
@@ -172,7 +167,6 @@ else:
     # noise-free train data
     noise_std = 0
     y_train = data_train.z
-# -
 
 # +
 # Cut out part of the train data to create out-of-distribution predictions.
@@ -484,8 +478,6 @@ ax.set_zlim((contour_z, zlim[1] + abs(contour_z)))
 ax.contourf(data_pred.XG, data_pred.YG, y_std, zdir="z", offset=contour_z)
 # -
 
-# +
 # When running as script
 if not is_interactive():
     plt.show()
-# -

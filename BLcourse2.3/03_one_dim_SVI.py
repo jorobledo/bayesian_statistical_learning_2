@@ -175,13 +175,11 @@ pprint(extract_model_params(model))
 print("likelihood params:")
 pprint(extract_model_params(likelihood))
 
-# +
 # Set new start hyper params
 model.mean_module.constant = 3.0
 model.covar_module.base_kernel.lengthscale = 1.0
 model.covar_module.outputscale = 1.0
 likelihood.noise_covar.noise = 0.3
-# -
 
 # # Fit GP to data: optimize hyper params
 #
