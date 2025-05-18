@@ -500,7 +500,9 @@ print(
 print(
     "learned noise:",
     np.sqrt(
-        extract_model_params(model, try_item=True)["likelihood.noise_covar.noise"]
+        extract_model_params(model, try_item=True)[
+            "likelihood.noise_covar.noise"
+        ]
     ),
 )
 # -

@@ -171,9 +171,9 @@ print(likelihood)
 
 # Default start hyper params
 print("model params:")
-pprint(extract_model_params(model, raw=False, try_item=False))
+pprint(extract_model_params(model))
 print("likelihood params:")
-pprint(extract_model_params(likelihood, raw=False, try_item=False))
+pprint(extract_model_params(likelihood))
 
 # +
 # Set new start hyper params
@@ -258,9 +258,9 @@ with torch.no_grad():
 
 # Values of optimized hyper params
 print("model params:")
-pprint(extract_model_params(model, raw=False, try_item=False))
+pprint(extract_model_params(model))
 print("likelihood params:")
-pprint(extract_model_params(likelihood, raw=False, try_item=False))
+pprint(extract_model_params(likelihood))
 
 
 # # Run prediction
@@ -364,7 +364,7 @@ print(
 print(
     "learned noise:",
     np.sqrt(
-        extract_model_params(likelihood, raw=False)["noise_covar.noise"]
+        extract_model_params(likelihood, try_item=True)["noise_covar.noise"]
     ),
 )
 # -

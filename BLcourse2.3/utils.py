@@ -13,6 +13,7 @@ def extract_model_params(model, raw=False, try_item=False) -> dict:
     See https://docs.gpytorch.ai/en/stable/examples/00_Basic_Usage/Hyperparameters.html#Raw-vs-Actual-Parameters
     """
     if try_item:
+
         def get_val(p):
             if isinstance(p, torch.Tensor):
                 if p.ndim == 0:
