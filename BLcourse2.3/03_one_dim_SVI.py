@@ -138,7 +138,7 @@ class ApproxGPModel(gpytorch.models.ApproximateGP):
             self,
             Z,
             variational_distribution,
-            learn_inducing_locations=False,
+            learn_inducing_locations=True,
         )
         super().__init__(variational_strategy)
         self.mean_module = gpytorch.means.ConstantMean()
@@ -223,7 +223,9 @@ loss_func = gpytorch.mlls.VariationalELBO(
     likelihood, model, num_data=X_train.shape[0]
 )
 
-train_dl = DataLoader(TensorDataset(X_train, y_train), batch_size=len(X_train)//2, shuffle=True)
+train_dl = DataLoader(
+    TensorDataset(X_train, y_train), batch_size=128, shuffle=True
+)
 
 n_iter = 200
 history = defaultdict(list)
