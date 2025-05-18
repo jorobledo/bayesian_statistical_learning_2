@@ -94,10 +94,10 @@ print(f"{X_train.shape=}")
 print(f"{y_train.shape=}")
 print(f"{X_pred.shape=}")
 
-##fig, ax = plt.subplots()
-##ax.scatter(X_train, y_train, marker="o", color="tab:blue", label="noisy data")
-##ax.plot(X_pred, y_gt_pred, ls="--", color="k", label="ground truth")
-##ax.legend()
+fig, ax = plt.subplots()
+ax.scatter(X_train, y_train, marker="o", color="tab:blue", label="noisy data")
+ax.plot(X_pred, y_gt_pred, ls="--", color="k", label="ground truth")
+ax.legend()
 # -
 
 # # Define GP model
@@ -247,9 +247,11 @@ for i_iter in range(n_iter):
         print(f"iter {i_iter + 1}/{n_iter}, {loss=:.3f}")
 # -
 
-# Plot hyper params and loss (negative log marginal likelihood) convergence
+# Plot scalar hyper params and loss (ELBO) convergence
 ncols = len(history)
-fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 5, 5))
+fig, axs = plt.subplots(
+    ncols=ncols, nrows=1, figsize=(ncols * 3, 3), layout="compressed"
+)
 with torch.no_grad():
     for ax, (p_name, p_lst) in zip(axs, history.items()):
         ax.plot(p_lst)
@@ -275,7 +277,7 @@ with torch.no_grad():
     post_pred_f = model(X_pred)
     post_pred_y = likelihood(model(X_pred))
 
-    fig, axs = plt.subplots(ncols=2, figsize=(12, 5), sharex=True, sharey=True)
+    fig, axs = plt.subplots(ncols=2, figsize=(14, 5), sharex=True, sharey=True)
     fig_sigmas, ax_sigmas = plt.subplots()
     for ii, (ax, post_pred, name, title) in enumerate(
         zip(

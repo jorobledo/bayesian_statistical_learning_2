@@ -275,11 +275,14 @@ for ii in range(n_iter):
 # -
 
 ncols = len(history)
-fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 5, 5))
-for ax, (p_name, p_lst) in zip(axs, history.items()):
-    ax.plot(p_lst)
-    ax.set_title(p_name)
-    ax.set_xlabel("iterations")
+fig, axs = plt.subplots(
+    ncols=ncols, nrows=1, figsize=(ncols * 3, 3), layout="compressed"
+)
+with torch.no_grad():
+    for ax, (p_name, p_lst) in zip(axs, history.items()):
+        ax.plot(p_lst)
+        ax.set_title(p_name)
+        ax.set_xlabel("iterations")
 
 # Values of optimized hyper params
 pprint(extract_model_params(model))
@@ -328,7 +331,9 @@ assert (post_pred_f.mean == post_pred_y.mean).all()
 
 # +
 ncols = 4
-fig, axs = plt.subplots(ncols=ncols, nrows=1, figsize=(ncols * 7, 5))
+fig, axs = plt.subplots(
+    ncols=ncols, nrows=1, figsize=(ncols * 5, 4), layout="compressed"
+)
 
 vmax = post_pred_y.stddev.max()
 cs = []
