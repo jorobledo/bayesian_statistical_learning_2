@@ -25,6 +25,7 @@
 # $\newcommand{\predve}[1]{\mathbf{#1}}$
 # $\newcommand{\test}[1]{#1_*}$
 # $\newcommand{\testtest}[1]{#1_{**}}$
+# $\newcommand{\dd}{\rm{d}}$
 # $\DeclareMathOperator{\diag}{diag}$
 # $\DeclareMathOperator{\cov}{cov}$
 
@@ -108,6 +109,9 @@ ax.legend()
 # 2015](https://proceedings.mlr.press/v38/hensman15.html). The model is
 # "sparse" since it works with a set of *inducing* points $(\ma Z, \ve u),
 # \ve u=f(\ma Z)$ which is much smaller than the train data $(\ma X, \ve y)$.
+# See also [the GPJax
+# docs](https://docs.jaxgaussianprocesses.com/_examples/uncollapsed_vi) for a
+# nice introduction.
 #
 # We have the same hyper parameters as before
 #
@@ -185,14 +189,12 @@ likelihood.noise_covar.noise = 0.3
 #
 # Now we optimize the GP hyper parameters by doing a GP-specific variational inference (VI),
 # where we optimize not the log marginal likelihood (ExactGP case),
-# but an ELBO (evidence lower bound) objective
+# but an ELBO (evidence lower bound) objective. The latter is a proxy for minimizing
+# the KL divergence between distributions, which in our case are the approximate
 #
-# $$
-# \max_\ve\zeta\left(\mathbb E_{q_{\ve\psi}(\ve u)}\left[\ln p(\ve y|\ve u) \right] -
-# D_{\text{KL}}(q_{\ve\psi}(\ve u)\Vert p(\ve u))\right)
-# $$
+# $$q_{\ve\zeta}(\mathbf f)=\int p(\mathbf f|\ve u)\,q_{\ve\psi}(\ve u)\,\dd\ve u\quad(\text{"variational strategy"})$$
 #
-# with respect to
+# and the true $p(\mathbf f|\mathcal D)$ posterior over function values. We optimize with respect to
 #
 # $$\ve\zeta = [\ell, \sigma_n^2, s, c, \ve\psi] $$
 #
