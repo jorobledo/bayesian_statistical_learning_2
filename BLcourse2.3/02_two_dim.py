@@ -196,6 +196,9 @@ s1 = ax.scatter(
 ax.set_xlabel("X_0")
 ax.set_ylabel("X_1")
 
+# The gray surface is the ground truth function. The blue points are the
+# training data.
+
 # # Define GP model
 
 
@@ -315,7 +318,39 @@ assert (post_pred_f.mean == post_pred_y.mean).all()
 
 # When `use_noise=False`, then the GP's prediction is an almost perfect
 # reconstruction of the ground truth function (in-distribution, so where we
-# have data). While 3D plots are fun, they are not optimal for judging how well
+# have data).
+# In this case, the plot makes the GP prediction look like a perfect
+# *interpolation* of the noise-free data, so $\test{\ve\mu} = \ve y$ at the
+# train points $\test{\ma X} = \ma X$. This
+# would be true if our GP model had exactly zero noise, so the likelihood's
+# $\sigma_n^2$ would be zero. However `print(model`)
+#
+# ```
+# ExactGPModel(
+#  (likelihood): GaussianLikelihood(
+#    (noise_covar): HomoskedasticNoise(
+#      (raw_noise_constraint): GreaterThan(1.000E-04)
+#    )
+#  )
+#  ...
+#  ```
+#
+# shows that actually the min value is $10^{-4}$, so we technically always have
+# a regression setting, just with very small noise. The reason is that in the
+# GP equations, we have
+#
+# $$\test{\ve\mu} = \test{\ma K}\,\left(\ma K+\sigma_n^2\,\ma I_N\right)^{-1}\,\ve y$$
+#
+# where $\sigma_n^2$ acts as a *regularization* parameter (also called "jitter
+# term" sometimes), which improves the
+# numerical stability of the linear system solve step
+#
+# $$\left(\ma K+\sigma_n^2\,\ma I_N\right)^{-1}\,\ve y\:.$$
+#
+# Also we always keep $\sigma_n^2$ as hyper parameter that we learn, and the
+# smallest value the hyper parameter optimization can reach is $10^{-4}$.
+#
+# While 3D plots are fun, they are not optimal for judging how well
 # the GP model represents the ground truth function.
 
 # # Plot difference to ground truth and uncertainty
@@ -433,20 +468,17 @@ print(
 # * Exercise 3: `use_noise=True`, `use_gap=True`
 #   * in-distribution (where we have data)
 #     * The distinction between
-#       epistemic and aleatoric in the way we define it is less meaningful,
+#       epistemic and aleatoric uncertainty in the way we define it is less meaningful,
 #       hence, `f_std` doesn't correlate well with `y_pred - y_true`. The
 #       reason is that the noise $\sigma_n$ shows up in two parts: (a) in the
 #       equation of $\test{\ma\Sigma}$ itself, so the "epistemic" uncertainty
 #       `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$ is bigger just because we have
 #       noise (regression) and (b) we add it in $\sqrt{\diag(\test{\ma\Sigma} +
 #       \sigma_n^2\,\ma I_N)}$ to get the total `y_std`
-#     * We learn the value of `noise_std` ($\sigma_n$) quite well and add **its
-#       square** as a constant ($\test{\ma\Sigma} + \sigma_n^2\,\ma I_N$). The
-#       `y_std` plot looks like the `f_std` one, but shifted by a constant. But
-#       this is not the case because we compare standard deviations and not
+#     * The `y_std` plot looks like the `f_std` one, but shifted by a constant.
+#       But this is not the case because we compare standard deviations and not
 #       variances, hence `y_std` - `f_std` is not constant, and in particular
-#       $\neq \sigma_n$, but both are in the same numerical range (0.15 vs.
-#       0.2).
+#       $\neq \sigma_n$, but both are in the same numerical range (0.15 vs. 0.2).
 #   * out-of-distribution: `f_std` (epistemic) dominates
 
 # # Exercises
