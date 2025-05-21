@@ -25,7 +25,8 @@
 # $\newcommand{\predve}[1]{\mathbf{#1}}$
 # $\newcommand{\test}[1]{#1_*}$
 # $\newcommand{\testtest}[1]{#1_{**}}$
-# $\newcommand{\dd}{\rm{d}}$
+# $\newcommand{\dd}{{\rm{d}}}$
+# $\newcommand{\lt}[1]{_{\text{#1}}}$
 # $\DeclareMathOperator{\diag}{diag}$
 # $\DeclareMathOperator{\cov}{cov}$
 
@@ -187,14 +188,31 @@ likelihood.noise_covar.noise = 0.3
 
 # # Fit GP to data: optimize hyper params
 #
-# Now we optimize the GP hyper parameters by doing a GP-specific variational inference (VI),
-# where we optimize not the log marginal likelihood (ExactGP case),
-# but an ELBO (evidence lower bound) objective. The latter is a proxy for minimizing
-# the KL divergence between distributions, which in our case are the approximate
+# Now we optimize the GP hyper parameters by doing a GP-specific variational
+# inference (VI), where we don't maximize the log marginal likelihood (ExactGP
+# case), but an ELBO ("evidence lower bound") objective -- a lower bound on the
+# marginal likelihood (the "evidence"). In variational inference, an ELBO objective
+# shows up when minimizing the KL divergence between
+# an approximate and the true posterior
+#
+# $$
+#     p(w|y) = \frac{p(y|w)\,p(w)}{\int p(y|w)\,p(w)\,\dd w}
+#            = \frac{p(y|w)\,p(w)}{p(y)}
+# $$
+#
+# $$
+#   \ve\zeta^* = \text{arg}\min_{\ve\zeta} D\lt{KL}(q_{\ve\zeta}(w)\,\Vert\, p(w|y))
+# $$
+#
+# to obtain the optimal variational parameters $\ve\zeta^*$ to approximate
+# $p(w|y)$ with $q_{\ve\zeta^*}(w)$.
+#
+# In our case the two distributions are the approximate
 #
 # $$q_{\ve\zeta}(\mathbf f)=\int p(\mathbf f|\ve u)\,q_{\ve\psi}(\ve u)\,\dd\ve u\quad(\text{"variational strategy"})$$
 #
-# and the true $p(\mathbf f|\mathcal D)$ posterior over function values. We optimize with respect to
+# and the true $p(\mathbf f|\mathcal D)$ posterior over function values. We
+# optimize with respect to
 #
 # $$\ve\zeta = [\ell, \sigma_n^2, s, c, \ve\psi] $$
 #
