@@ -6,7 +6,7 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.17.1
+#       jupytext_version: 1.18.1
 #   kernelspec:
 #     display_name: bayes-ml-course
 #     language: python
@@ -15,10 +15,14 @@
 
 # # About
 #
-# In this notebook, we replace the ExactGP inference and log marginal
-# likelihood optimization by using sparse stochastic variational inference.
+# In this notebook, we replace the `ExactGP` inference and log marginal
+# likelihood optimization by Sparse Stochastic Variational Inference.
 # This serves as an example of the many methods `gpytorch` offers to make GPs
 # scale to large data sets.
+#
+# The method goes by different acronyms sometimes, which skip the "Sparse"
+# aspect for some reason, such as (SVI = Stochastic Variational Inference,
+# SVGP = Stochastic Variational GP Regression).
 # $\newcommand{\ve}[1]{\mathit{\boldsymbol{#1}}}$
 # $\newcommand{\ma}[1]{\mathbf{#1}}$
 # $\newcommand{\pred}[1]{\rm{#1}}$
@@ -33,8 +37,8 @@
 # # Imports, helpers, setup
 
 # ##%matplotlib notebook
-# %matplotlib widget
-# ##%matplotlib inline
+# ##%matplotlib widget
+# %matplotlib inline
 
 # +
 import math
@@ -57,10 +61,10 @@ torch.manual_seed(123)
 
 # # Generate toy 1D data
 #
-# Now we generate 10x more points as in the ExactGP case, still the inference
+# Now we generate 10x more points as in the `ExactGP` case, still the inference
 # won't be much slower (exact GPs scale roughly as $N^3$). Note that the data we
 # use here is still tiny (1000 points is easy even for exact GPs), so the
-# method's usefulness cannot be fully exploited in our example
+# method's usefulness cannot be fully exploited with our small scale example
 # -- also we don't even use a GPU yet :).
 
 
@@ -100,6 +104,9 @@ fig, ax = plt.subplots()
 ax.scatter(X_train, y_train, marker="o", color="tab:blue", label="noisy data")
 ax.plot(X_pred, y_gt_pred, ls="--", color="k", label="ground truth")
 ax.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 # # Define GP model
@@ -109,7 +116,9 @@ ax.legend()
 # based on [Hensman et al., "Scalable Variational Gaussian Process Classification",
 # 2015](https://proceedings.mlr.press/v38/hensman15.html). The model is
 # "sparse" since it works with a set of *inducing* points $(\ma Z, \ve u),
-# \ve u=f(\ma Z)$ which is much smaller than the train data $(\ma X, \ve y)$.
+# \ve u=f(\ma Z)$ with $f$ the unknown ground truth function. This inducing points data set
+# is much smaller than the train data $(\ma X, \ve y)$, which makes the method
+# scale to large training data set sizes.
 # See also [the GPJax
 # docs](https://docs.jaxgaussianprocesses.com/_examples/uncollapsed_vi) for a
 # nice introduction.
@@ -121,13 +130,21 @@ ax.legend()
 # * $s$ = `model.covar_module.outputscale`
 # * $m(\ve x) = c$ = `model.mean_module.constant`
 #
-# plus additional ones, introduced by the approximations used:
+# plus additional ones, introduced by the approximations used (more details
+# below):
 #
 # * the learnable inducing points $\ma Z$ for the variational distribution
 #   $q_{\ve\psi}(\ve u)$
-# * learnable parameters of the variational distribution $q_{\ve\psi}(\ve u)=\mathcal N(\ve m_u, \ma S)$: the
+# * learnable parameters $\ve m_u$ and $\ma L$ of the variational
+#   distribution $q_{\ve\psi}(\ve u)=\mathcal N(\ve m_u, \ma S)$: the
 #   variational mean $\ve m_u$ and covariance $\ma S$ in form a lower triangular
 #   matrix $\ma L$ such that $\ma S=\ma L\,\ma L^\top$
+#
+# In the code below:
+#
+# * $\ma Z$ = `model.variational_strategy.inducing_points`
+# * $\ve m_u$ = `model.variational_strategy._variational_distribution.variational_mean`
+# * $\ma L$ = `model.variational_strategy._variational_distribution.chol_variational_covar`
 
 
 # +
@@ -158,13 +175,19 @@ class ApproxGPModel(gpytorch.models.ApproximateGP):
 
 
 likelihood = gpytorch.likelihoods.GaussianLikelihood()
+# -
+
+# Now we initialize the model by defining optimization start values for the
+# inducing points $\ma Z$. We use a 5% random sub-sample of `X_train`, so we
+# effectively reduce the data size by a factor of 20. The learning process
+# (below) will find an optimal set of inducing points that approximately
+# represents the full dataset.
 
 n_train = len(X_train)
-# Start values for inducing points Z, use 10% random sub-sample of X_train.
-ind_points_fraction = 0.1
+ind_points_fraction = 0.05
 ind_idxs = torch.randperm(n_train)[: int(n_train * ind_points_fraction)]
+print(f"Number of inducing points={len(ind_idxs)}")
 model = ApproxGPModel(Z=X_train[ind_idxs])
-# -
 
 
 # Inspect the model
@@ -188,30 +211,35 @@ likelihood.noise_covar.noise = 0.3
 
 # # Fit GP to data: optimize hyper params
 #
-# Now we optimize the GP hyper parameters by doing a GP-specific variational
-# inference (VI), where we don't maximize the log marginal likelihood (ExactGP
-# case), but an ELBO ("evidence lower bound") objective -- a lower bound on the
-# marginal likelihood (the "evidence"). In variational inference, an ELBO objective
-# shows up when minimizing the KL divergence between
-# an approximate and the true posterior
+# In contrast to `ExactGP`, we will approximate the exact posterior by a
+# distribution $q_{\ve\zeta}$ (with parameters $\ve\zeta$) which uses
+# the inducing points. To find that distribution, we optimize the GP hyper
+# parameters by doing a GP-specific variational inference (VI), where we don't
+# maximize the log marginal likelihood (`ExactGP` case), but an ELBO ("evidence
+# lower bound") objective -- a lower bound on the marginal likelihood (the
+# "evidence"). In variational inference, an ELBO objective shows up when
+# minimizing the KL divergence between an approximate and the true posterior.
+# Starting with Bayes' rule
 #
 # $$
 #     p(w|y) = \frac{p(y|w)\,p(w)}{\int p(y|w)\,p(w)\,\dd w}
 #            = \frac{p(y|w)\,p(w)}{p(y)}
 # $$
 #
+# we obtain the optimal variational parameters $\ve\zeta^*$ to approximate
+# the true posterior $p(w|y)$ with $q_{\ve\zeta^*}(w)$ by
+#
 # $$
 #   \ve\zeta^* = \text{arg}\min_{\ve\zeta} D\lt{KL}(q_{\ve\zeta}(w)\,\Vert\, p(w|y))
 # $$
 #
-# to obtain the optimal variational parameters $\ve\zeta^*$ to approximate
-# $p(w|y)$ with $q_{\ve\zeta^*}(w)$.
+# In our case the two distributions are the approximate "variational strategy"
 #
-# In our case the two distributions are the approximate
+# $$q_{\ve\zeta}(\mathbf f)=\int p(\mathbf f|\ve u)\,q_{\ve\psi}(\ve u)\,\dd\ve u$$
 #
-# $$q_{\ve\zeta}(\mathbf f)=\int p(\mathbf f|\ve u)\,q_{\ve\psi}(\ve u)\,\dd\ve u\quad(\text{"variational strategy"})$$
-#
-# and the true $p(\mathbf f|\mathcal D)$ posterior over function values. We
+# which maps the inducing points $\ve u = f(\ma Z)$ to the full data set
+# $\predve f = f(\ma X)$,
+# and the true posterior $p(\mathbf f|\mathcal D)$ over function values. We
 # optimize with respect to
 #
 # $$\ve\zeta = [\ell, \sigma_n^2, s, c, \ve\psi] $$
@@ -222,11 +250,12 @@ likelihood.noise_covar.noise = 0.3
 #
 # the parameters of the variational distribution $q_{\ve\psi}(\ve u)$.
 #
-# In addition, we perform a stochastic
-# optimization by using a deep learning type mini-batch loop, hence
-# "stochastic" variational inference (SVI). The latter speeds up the
-# optimization since we only look at a fraction of data per optimizer step to
-# calculate an approximate loss gradient (`loss.backward()`).
+# In addition, we perform a stochastic optimization by using a deep learning
+# type mini-batch loop, hence "stochastic" variational inference (SVI). The
+# latter speeds up the optimization since we only look at a fraction of data
+# per optimizer step to calculate an approximate loss gradient
+# (`loss.backward()`). Next to using inducing points, this is the second
+# performance improvement technique of SVGP.
 
 # +
 # Train mode
@@ -245,7 +274,7 @@ train_dl = DataLoader(
     TensorDataset(X_train, y_train), batch_size=128, shuffle=True
 )
 
-n_iter = 200
+n_iter = 50
 history = defaultdict(list)
 for i_iter in range(n_iter):
     for i_batch, (X_batch, y_batch) in enumerate(train_dl):
@@ -265,8 +294,8 @@ for i_iter in range(n_iter):
         history[p_name].append(np.mean(p_lst))
     if (i_iter + 1) % 10 == 0:
         print(f"iter {i_iter + 1}/{n_iter}, {loss=:.3f}")
-# -
 
+# +
 # Plot scalar hyper params and loss (ELBO) convergence
 ncols = len(history)
 fig, axs = plt.subplots(
@@ -277,6 +306,10 @@ with torch.no_grad():
         ax.plot(p_lst)
         ax.set_title(p_name)
         ax.set_xlabel("iterations")
+
+if is_interactive():
+    plt.show()
+# -
 
 # Values of optimized hyper params
 print("model params:")
@@ -313,12 +346,18 @@ with torch.no_grad():
         yf_std = post_pred.stddev
         lower = yf_mean - 2 * yf_std
         upper = yf_mean + 2 * yf_std
-        ax.plot(
+
+        y_min = y_train.min()
+        y_max = y_train.max()
+        y_span = y_max - y_min
+
+        ax.scatter(
             X_train.numpy(),
             y_train.numpy(),
-            "o",
+            marker="o",
             label="data",
-            color="tab:blue",
+            color="tab:gray",
+            alpha=0.2,
         )
         ax.plot(
             X_pred.numpy(),
@@ -352,6 +391,16 @@ with torch.no_grad():
                 r"total: $\pm 2\sqrt{\mathrm{diag}(\Sigma_* + \sigma_n^2\,I)}$"
             )
             zorder = 0
+        ax.set_ylim([y_min - 0.3 * y_span, y_max + 0.3 * y_span])
+        ax.scatter(
+            model.variational_strategy.inducing_points.numpy(),
+            [y_min] * len(model.variational_strategy.inducing_points),
+            marker="o",
+            label="inducing points",
+            color="tab:blue",
+        )
+        if ii == 1:
+            ax.legend()
         ax_sigmas.fill_between(
             X_pred.numpy(),
             lower.numpy(),
@@ -361,15 +410,12 @@ with torch.no_grad():
             alpha=0.5,
             zorder=zorder,
         )
-        y_min = y_train.min()
-        y_max = y_train.max()
-        y_span = y_max - y_min
-        ax.set_ylim([y_min - 0.3 * y_span, y_max + 0.3 * y_span])
         plot_samples(ax, X_pred, yf_samples, label="posterior pred. samples")
-        if ii == 1:
-            ax.legend()
     ax_sigmas.set_title("total vs. epistemic uncertainty")
     ax_sigmas.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 # # Let's check the learned noise

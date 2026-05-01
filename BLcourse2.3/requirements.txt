@@ -3,9 +3,11 @@
 # ----------------------------------------------------------------------------
 torch
 gpytorch
-pyro-ppl
 matplotlib
 scikit-learn
+
+# Maybe later (gpytorch MCMC inference examples)
+##pyro-ppl
 
 # ----------------------------------------------------------------------------
 # Jupyter stuff, this must be present in the used Jupyter kernel on a hosted

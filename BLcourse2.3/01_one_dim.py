@@ -43,8 +43,8 @@
 # # Imports, helpers, setup
 
 # ##%matplotlib notebook
-# %matplotlib widget
-# ##%matplotlib inline
+# ##%matplotlib widget
+# %matplotlib inline
 
 # +
 import math
@@ -122,6 +122,9 @@ fig, ax = plt.subplots()
 ax.scatter(X_train, y_train, marker="o", color="tab:blue", label="noisy data")
 ax.plot(X_pred, y_gt_pred, ls="--", color="k", label="ground truth")
 ax.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 # # Define GP model
@@ -232,6 +235,9 @@ with torch.no_grad():
         label="confidence",
     )
     ax.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 
@@ -318,6 +324,9 @@ with torch.no_grad():
     ax.set_ylim([y_min - 0.3 * y_span, y_max + 0.3 * y_span])
     plot_samples(ax, X_pred, f_samples, label="posterior pred. samples")
     ax.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 # We observe that all sampled functions (green) and the mean (red) tend towards
@@ -360,6 +369,7 @@ for ii in range(n_iter):
     history["loss"].append(loss.item())
 # -
 
+# +
 # Plot hyper params and loss (negative log marginal likelihood) convergence
 ncols = len(history)
 fig, axs = plt.subplots(
@@ -370,6 +380,10 @@ with torch.no_grad():
         ax.plot(p_lst)
         ax.set_title(p_name)
         ax.set_xlabel("iterations")
+
+if is_interactive():
+    plt.show()
+# -
 
 # Values of optimized hyper params
 pprint(extract_model_params(model))
@@ -385,7 +399,7 @@ pprint(extract_model_params(model))
 # * epistemic: $p(\test{\predve f}|\test{\ma X}, \ma X, \ve y) =
 #   \mathcal N(\test{\ve\mu}, \test{\ma\Sigma})$ = `post_pred_f` with
 #   $\test{\ma\Sigma} = \testtest{\ma K} - \test{\ma K}\,(\ma K+\sigma_n^2\,\ma I)^{-1}\,\test{\ma K}^\top$
-# * total: $p(\test{\predve y}|\test{\ma X}, \ma X, \ve y) =
+# * total: $p(\test{\ve y}|\test{\ma X}, \ma X, \ve y) =
 #   \mathcal N(\test{\ve\mu}, \test{\ma\Sigma} + \sigma_n^2\,\ma I_N))$ = `post_pred_y`
 
 # +
@@ -471,6 +485,9 @@ with torch.no_grad():
             ax.legend()
     ax_sigmas.set_title("total vs. epistemic uncertainty")
     ax_sigmas.legend()
+
+if is_interactive():
+    plt.show()
 # -
 
 # We find that $\test{\ma\Sigma}$ reflects behavior we would like to see from

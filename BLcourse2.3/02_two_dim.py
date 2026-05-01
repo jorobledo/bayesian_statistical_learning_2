@@ -28,10 +28,11 @@
 # $\newcommand{\testtest}[1]{#1_{**}}$
 # $\DeclareMathOperator{\diag}{diag}$
 # $\DeclareMathOperator{\cov}{cov}$
+# $\DeclareMathOperator{\sinc}{sinc}$
 
 # ##%matplotlib notebook
-# %matplotlib widget
-# ##%matplotlib inline
+# ##%matplotlib widget
+# %matplotlib inline
 
 # +
 from collections import defaultdict
@@ -54,15 +55,15 @@ torch.manual_seed(123)
 
 # # Generate toy 2D data
 #
-# Our ground truth function is $f(\ve x) = \sin(r) / r$ with $\ve x =
-# [x_0,x_1] \in\mathbb R^2$ and the radial distance
-# $r=\sqrt{\ve x^\top\,\ve x}$, also known as "Mexican hat" function, which is a
-# radial wave-like pattern which decays with distance from the center $\ve
-# x=\ve 0$. We generate data by random sampling 2D points $\ve x_i$ and calculating
-# $y_i = f(\ve x_i)$, optionally adding Gaussian noise further down.
+# Our ground truth function is $f(\ve x) = \sin(r) / r$ (also known as $\sinc(r)$)
+# with $\ve x = [x_0,x_1] \in\mathbb R^2$ and the radial distance $r=\sqrt{\ve x^\top\,\ve x}$.
+# This creates a radial wave-like pattern which decays
+# with distance from the center $\ve x=\ve 0$. We generate data by random
+# sampling 2D points $\ve x_i$ and calculating $y_i = f(\ve x_i)$, optionally
+# adding Gaussian noise further down.
 
 
-class MexicanHat:
+class Sinc:
     def __init__(self, xlim, ylim, nx, ny, mode, **kwds):
         self.xlim = xlim
         self.ylim = ylim
@@ -111,98 +112,10 @@ class MexicanHat:
         self.z = self.n2t(y_scaler.transform(self.z[:, None])[:, 0])
 
 
-# +
-data_train = MexicanHat(
-    xlim=[-15, 25], ylim=[-15, 5], nx=20, ny=20, mode="rand"
-)
-x_scaler = StandardScaler().fit(data_train.X)
-y_scaler = StandardScaler().fit(data_train.z[:, None])
-data_train.apply_scalers(x_scaler, y_scaler)
-
-data_pred = MexicanHat(
-    xlim=[-15, 25], ylim=[-15, 5], nx=100, ny=100, mode="grid"
-)
-data_pred.apply_scalers(x_scaler, y_scaler)
-
-# train inputs
-X_train = data_train.X
-
-# inputs for prediction and plotting
-X_pred = data_pred.X
-# -
-
-# # Exercise 1
-
-# Keep the settings below and explore the notebook till the end first.
-
-use_noise = False
-use_gap = False
-
-# # Exercise 2
-
-# First complete the notebook as is, then come back here.
-
-# +
-##use_noise = False
-##use_gap = True
-# -
-
-# # Exercise 3
-
-# First complete the notebook with Exercise 2, then come back here.
-
-# +
-##use_noise = True
-##use_gap = True
-# -
-
-if use_noise:
-    # noisy train data
-    noise_std = 0.2
-    noise_dist = torch.distributions.Normal(loc=0, scale=noise_std)
-    y_train = data_train.z + noise_dist.sample(
-        sample_shape=(len(data_train.z),)
-    )
-else:
-    # noise-free train data
-    noise_std = 0
-    y_train = data_train.z
-
-# +
-# Cut out part of the train data to create out-of-distribution predictions.
-# Same as the "gaps" we created in the 1D case.
-
-if use_gap:
-    mask = (X_train[:, 0] > 0) & (X_train[:, 1] < 0)
-    X_train = X_train[~mask, :]
-    y_train = y_train[~mask]
-# -
-
-fig, ax = fig_ax_3d()
-s0 = ax.plot_surface(
-    data_pred.XG,
-    data_pred.YG,
-    data_pred.z.reshape((data_pred.nx, data_pred.ny)),
-    color="tab:grey",
-    alpha=0.5,
-)
-s1 = ax.scatter(
-    xs=X_train[:, 0],
-    ys=X_train[:, 1],
-    zs=y_train,
-    color="tab:blue",
-    alpha=0.5,
-)
-ax.set_xlabel("X_0")
-ax.set_ylabel("X_1")
-
-# The gray surface is the ground truth function. The blue points are the
-# training data.
-
-# # Define GP model
+# # Helper function for exercises
 
 
-# +
+# Define GP model, same as in 1D notebook
 class ExactGPModel(gpytorch.models.ExactGP):
     """API:
 
@@ -227,94 +140,301 @@ class ExactGPModel(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-likelihood = gpytorch.likelihoods.GaussianLikelihood()
-model = ExactGPModel(X_train, y_train, likelihood)
-# -
+# This function contains all the code of the 1D notebook plus some more
+# plotting. It creates the 2D train data set, creates the GP model, runs the
+# hyper parameter optimization and plots results. We will re-use this to cover
+# different cases in the exercises below.
 
-# Inspect the model
-print(model)
 
-# Default start hyper params
-pprint(extract_model_params(model))
+def run_example(use_noise: bool = False, use_gap: bool = False):
+    """
+    Parameters
+    ----------
+    use_noise
+        Add Gaussian noise to training data
+    use_gap
+        Create a out-of-distribution region (a "gap") in the training data
+    """
 
-# +
-# Set new start hyper params
-model.mean_module.constant = 0.0
-model.covar_module.base_kernel.lengthscale = 3.0
-model.covar_module.outputscale = 8.0
-model.likelihood.noise_covar.noise = 0.1
+    data_train = Sinc(xlim=[-15, 25], ylim=[-15, 5], nx=20, ny=20, mode="rand")
+    x_scaler = StandardScaler().fit(data_train.X)
+    y_scaler = StandardScaler().fit(data_train.z[:, None])
+    data_train.apply_scalers(x_scaler, y_scaler)
 
-pprint(extract_model_params(model))
-# -
+    data_pred = Sinc(
+        xlim=[-15, 25], ylim=[-15, 5], nx=100, ny=100, mode="grid"
+    )
+    data_pred.apply_scalers(x_scaler, y_scaler)
 
-# # Fit GP to data: optimize hyper params
+    # train inputs
+    X_train = data_train.X
 
-# +
-# Train mode
-model.train()
-likelihood.train()
+    # inputs for prediction and plotting ("test data")
+    X_pred = data_pred.X
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.15)
-loss_func = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+    if use_noise:
+        # noisy train data
+        noise_std = 0.2
+        noise_dist = torch.distributions.Normal(loc=0, scale=noise_std)
+        y_train = data_train.z + noise_dist.sample(
+            sample_shape=(len(data_train.z),)
+        )
+    else:
+        # noise-free train data
+        noise_std = 0
+        y_train = data_train.z
 
-n_iter = 400
-history = defaultdict(list)
-for ii in range(n_iter):
-    optimizer.zero_grad()
-    loss = -loss_func(model(X_train), y_train)
-    loss.backward()
-    optimizer.step()
-    if (ii + 1) % 10 == 0:
-        print(f"iter {ii + 1}/{n_iter}, {loss=:.3f}")
-    for p_name, p_val in extract_model_params(model, try_item=True).items():
-        history[p_name].append(p_val)
-    history["loss"].append(loss.item())
-# -
+    # Cut out part of the train data to create out-of-distribution predictions.
+    # Same as the "gaps" we created in the 1D case.
+    if use_gap:
+        mask = (X_train[:, 0] > 0) & (X_train[:, 1] < 0)
+        X_train = X_train[~mask, :]
+        y_train = y_train[~mask]
 
-ncols = len(history)
-fig, axs = plt.subplots(
-    ncols=ncols, nrows=1, figsize=(ncols * 3, 3), layout="compressed"
-)
-with torch.no_grad():
-    for ax, (p_name, p_lst) in zip(axs, history.items()):
-        ax.plot(p_lst)
-        ax.set_title(p_name)
-        ax.set_xlabel("iterations")
+    print(
+        "Plot the data. The gray surface is the ground truth function. "
+        "The blue points are the training data."
+    )
 
-# Values of optimized hyper params
-pprint(extract_model_params(model))
-
-# # Run prediction
-
-# +
-model.eval()
-likelihood.eval()
-
-with torch.no_grad():
-    post_pred_f = model(X_pred)
-    post_pred_y = likelihood(model(X_pred))
-
-    fig = plt.figure()
-    ax = fig.add_subplot(projection="3d")
-    ax.plot_surface(
+    fig, ax = fig_ax_3d()
+    s0 = ax.plot_surface(
         data_pred.XG,
         data_pred.YG,
         data_pred.z.reshape((data_pred.nx, data_pred.ny)),
         color="tab:grey",
         alpha=0.5,
     )
-    ax.plot_surface(
-        data_pred.XG,
-        data_pred.YG,
-        post_pred_y.mean.reshape((data_pred.nx, data_pred.ny)),
-        color="tab:red",
+    s1 = ax.scatter(
+        xs=X_train[:, 0],
+        ys=X_train[:, 1],
+        zs=y_train,
+        color="tab:blue",
         alpha=0.5,
     )
     ax.set_xlabel("X_0")
     ax.set_ylabel("X_1")
 
-assert (post_pred_f.mean == post_pred_y.mean).all()
-# -
+    if is_interactive():
+        plt.show()
+
+    likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    model = ExactGPModel(X_train, y_train, likelihood)
+
+    print("\nInspect the model:")
+    print(model)
+
+    print("\nDefault start hyper params:")
+    pprint(extract_model_params(model))
+
+    # Set new start hyper params
+    model.mean_module.constant = 0.0
+    model.covar_module.base_kernel.lengthscale = 3.0
+    model.covar_module.outputscale = 8.0
+    model.likelihood.noise_covar.noise = 0.1
+
+    pprint(extract_model_params(model))
+
+    print("\nFit GP to data: optimize hyper params:")
+    # Train mode
+    model.train()
+    likelihood.train()
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.15)
+    loss_func = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
+
+    n_iter = 400
+    history = defaultdict(list)
+    for ii in range(n_iter):
+        optimizer.zero_grad()
+        loss = -loss_func(model(X_train), y_train)
+        loss.backward()
+        optimizer.step()
+        if (ii + 1) % 10 == 0:
+            print(f"iter {ii + 1}/{n_iter}, {loss=:.3f}")
+        for p_name, p_val in extract_model_params(
+            model, try_item=True
+        ).items():
+            history[p_name].append(p_val)
+        history["loss"].append(loss.item())
+
+    ncols = len(history)
+    fig, axs = plt.subplots(
+        ncols=ncols, nrows=1, figsize=(ncols * 3, 3), layout="compressed"
+    )
+    with torch.no_grad():
+        for ax, (p_name, p_lst) in zip(axs, history.items()):
+            ax.plot(p_lst)
+            ax.set_title(p_name)
+            ax.set_xlabel("iterations")
+
+    if is_interactive():
+        plt.show()
+
+    print("\nValues of optimized hyper params:")
+    pprint(extract_model_params(model))
+
+    print("\nPlot prediction:")
+    model.eval()
+    likelihood.eval()
+
+    with torch.no_grad():
+        post_pred_f = model(X_pred)
+        post_pred_y = likelihood(model(X_pred))
+
+        fig, ax = fig_ax_3d()
+        ax.plot_surface(
+            data_pred.XG,
+            data_pred.YG,
+            data_pred.z.reshape((data_pred.nx, data_pred.ny)),
+            color="tab:grey",
+            alpha=0.5,
+        )
+        ax.plot_surface(
+            data_pred.XG,
+            data_pred.YG,
+            post_pred_y.mean.reshape((data_pred.nx, data_pred.ny)),
+            color="tab:red",
+            alpha=0.5,
+        )
+        ax.set_xlabel("X_0")
+        ax.set_ylabel("X_1")
+
+    assert (post_pred_f.mean == post_pred_y.mean).all()
+
+    if is_interactive():
+        plt.show()
+
+    print("""
+    Plot difference to ground truth and uncertainty
+
+    Let's use contour plots to visualize the difference between GP prediction and
+    ground truth, as well as epistemic, total and aleatoric uncertainty.
+    """)
+
+    ncols = 4
+    fig, axs = plt.subplots(
+        ncols=ncols, nrows=1, figsize=(ncols * 5, 4), layout="compressed"
+    )
+
+    vmax = post_pred_y.stddev.max()
+    cs = []
+
+    cs.append(
+        axs[0].contourf(
+            data_pred.XG,
+            data_pred.YG,
+            torch.abs(post_pred_y.mean - data_pred.z).reshape(
+                (data_pred.nx, data_pred.ny)
+            ),
+        )
+    )
+    axs[0].set_title("|y_pred - y_true|")
+
+    f_std = post_pred_f.stddev.reshape((data_pred.nx, data_pred.ny))
+    y_std = post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny))
+
+    cs.append(
+        axs[1].contourf(
+            data_pred.XG,
+            data_pred.YG,
+            f_std,
+            vmin=0,
+            vmax=vmax,
+        )
+    )
+    axs[1].set_title("epistemic: f_std")
+
+    cs.append(
+        axs[2].contourf(
+            data_pred.XG,
+            data_pred.YG,
+            y_std,
+            vmin=0,
+            vmax=vmax,
+        )
+    )
+    axs[2].set_title("total: y_std")
+
+    cs.append(
+        axs[3].contourf(
+            data_pred.XG,
+            data_pred.YG,
+            y_std - f_std,
+            vmin=0,
+            cmap="plasma",
+            ##vmax=vmax,
+        )
+    )
+    axs[3].set_title("aleatoric: y_std - f_std")
+
+    for ax, c in zip(axs, cs):
+        ax.set_xlabel("X_0")
+        ax.set_ylabel("X_1")
+        ax.scatter(x=X_train[:, 0], y=X_train[:, 1], color="white", alpha=0.2)
+        fig.colorbar(c, ax=ax)
+
+    if is_interactive():
+        plt.show()
+
+    print("\nLet's check the learned noise:")
+
+    # Target noise to learn
+    print("data noise:", noise_std)
+
+    # The two below must be the same
+    print(
+        "learned noise:",
+        (post_pred_y.stddev**2 - post_pred_f.stddev**2).mean().sqrt().item(),
+    )
+    print(
+        "learned noise:",
+        np.sqrt(
+            extract_model_params(model, try_item=True)[
+                "likelihood.noise_covar.noise"
+            ]
+        ),
+    )
+
+    print("\n3D confidence bands:")
+    y_mean = post_pred_y.mean.reshape((data_pred.nx, data_pred.ny))
+    y_std = post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny))
+    upper = y_mean + 2 * y_std
+    lower = y_mean - 2 * y_std
+
+    fig, ax = fig_ax_3d()
+    for Z, color in [(upper, "tab:green"), (lower, "tab:red")]:
+        ax.plot_surface(
+            data_pred.XG,
+            data_pred.YG,
+            Z,
+            color=color,
+            alpha=0.5,
+        )
+
+    contour_z = lower.min() - 1
+    zlim = ax.get_xlim()
+    ax.set_zlim((contour_z, zlim[1] + abs(contour_z)))
+    ax.contourf(data_pred.XG, data_pred.YG, y_std, zdir="z", offset=contour_z)
+
+    if is_interactive():
+        plt.show()
+
+
+# # Run exercises
+
+# We have the following uncertainty terms:
+#
+# * epistemic: `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$
+# * total: `y_std` = $\sqrt{\diag(\test{\ma\Sigma} + \sigma_n^2\,\ma I_N)}$
+# * aleatoric: we have two ways of representing it
+#   * from the likelihood: $\sigma_n$
+#   * for plotting: we use `y_std - f_std`, this is $\neq \sigma_n$ because of the $\sqrt{\cdot}$
+#     above
+#
+
+# # Exercise 1
+
+run_example(use_noise=False, use_gap=False)
 
 # When `use_noise=False`, then the GP's prediction is an almost perfect
 # reconstruction of the ground truth function (in-distribution, so where we
@@ -337,7 +457,8 @@ assert (post_pred_f.mean == post_pred_y.mean).all()
 #
 # shows that actually the min value is $10^{-4}$, so we technically always have
 # a regression setting, just with very small noise. The reason is that in the
-# GP equations, we have
+# GP equations, the GP mean prediction at test points $\test{\ma X}$ is given
+# by
 #
 # $$\test{\ve\mu} = \test{\ma K}\,\left(\ma K+\sigma_n^2\,\ma I_N\right)^{-1}\,\ve y$$
 #
@@ -349,166 +470,55 @@ assert (post_pred_f.mean == post_pred_y.mean).all()
 #
 # Also we always keep $\sigma_n^2$ as hyper parameter that we learn, and the
 # smallest value the hyper parameter optimization can reach is $10^{-4}$.
+
+# ## Observations
 #
-# While 3D plots are fun, they are not optimal for judging how well
-# the GP model represents the ground truth function.
-
-# # Plot difference to ground truth and uncertainty
-#
-# Let's use contour plots to visualize the difference between GP prediction and
-# ground truth, as well as epistemic, total and aleatoric uncertainty.
-
-# +
-ncols = 4
-fig, axs = plt.subplots(
-    ncols=ncols, nrows=1, figsize=(ncols * 5, 4), layout="compressed"
-)
-
-vmax = post_pred_y.stddev.max()
-cs = []
-
-cs.append(
-    axs[0].contourf(
-        data_pred.XG,
-        data_pred.YG,
-        torch.abs(post_pred_y.mean - data_pred.z).reshape(
-            (data_pred.nx, data_pred.ny)
-        ),
-    )
-)
-axs[0].set_title("|y_pred - y_true|")
-
-f_std = post_pred_f.stddev.reshape((data_pred.nx, data_pred.ny))
-y_std = post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny))
-
-cs.append(
-    axs[1].contourf(
-        data_pred.XG,
-        data_pred.YG,
-        f_std,
-        vmin=0,
-        vmax=vmax,
-    )
-)
-axs[1].set_title("epistemic: f_std")
-
-cs.append(
-    axs[2].contourf(
-        data_pred.XG,
-        data_pred.YG,
-        y_std,
-        vmin=0,
-        vmax=vmax,
-    )
-)
-axs[2].set_title("total: y_std")
-
-cs.append(
-    axs[3].contourf(
-        data_pred.XG,
-        data_pred.YG,
-        y_std - f_std,
-        vmin=0,
-        cmap="plasma",
-        ##vmax=vmax,
-    )
-)
-axs[3].set_title("aleatoric: y_std - f_std")
-
-for ax, c in zip(axs, cs):
-    ax.set_xlabel("X_0")
-    ax.set_ylabel("X_1")
-    ax.scatter(x=X_train[:, 0], y=X_train[:, 1], color="white", alpha=0.2)
-    fig.colorbar(c, ax=ax)
-# -
-
-# ## Let's check the learned noise
-
-# +
-# Target noise to learn
-print("data noise:", noise_std)
-
-# The two below must be the same
-print(
-    "learned noise:",
-    (post_pred_y.stddev**2 - post_pred_f.stddev**2).mean().sqrt().item(),
-)
-print(
-    "learned noise:",
-    np.sqrt(
-        extract_model_params(model, try_item=True)[
-            "likelihood.noise_covar.noise"
-        ]
-    ),
-)
-# -
-
-# # Observations
-
-# We have the following terms:
-#
-# * epistemic: `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$
-# * total: `y_std` = $\sqrt{\diag(\test{\ma\Sigma} + \sigma_n^2\,\ma I_N)}$
-# * aleatoric: we have two ways of representing it
-#   * from the likelihood: $\sigma_n$
-#   * for plotting: we use `y_std` - `f_std`, this is $\neq \sigma_n$ because of the $\sqrt{\cdot}$
-#     above
-#
-# We can make the following observations:
-#
-# * Exercise 1: `use_noise=False`, `use_gap=False`
+# * `use_noise=False`, `use_gap=False`
 #   * The epistemic uncertainty `f_std` is a good indicator
 #     of the (small) differences between model prediction and ground truth
+#     (correlates with `|y_pred - y_true|`)
 #   * The learned variance $\sigma_n^2$, and hence the aleatoric uncertainty is
-#     near zero, which makes sense for noise-free data
-# * Exercise 2: `use_noise=False`, `use_gap=True`
-#   * When faced with out-of-distribution (OOD) data, the epistemic `f_std`
-#     clearly shows where the model will make wrong (less trustworthy)
-#     predictions
-# * Exercise 3: `use_noise=True`, `use_gap=True`
+#     near zero, which makes sense for noise-free data, hence `f_std` and
+#     `y_std` are basically identical
+#   * The aleatoric `y_std - f_std` (4th plot) is not constant, and in particular
+#     $\neq \sigma_n$ (learned noise) because we compare standard deviations and not variances.
+
+# # Exercise 2
+
+run_example(use_noise=False, use_gap=True)
+
+# ## Observations
+#
+# * `use_noise=False`, `use_gap=True`
 #   * in-distribution (where we have data)
-#     * The distinction between
-#       epistemic and aleatoric uncertainty in the way we define it is less meaningful,
-#       hence, `f_std` doesn't correlate well with `y_pred - y_true`. The
+#     * same as Exercise 1
+#   * out-of-distribution
+#     * When faced with out-of-distribution (OOD) data, the epistemic `f_std`
+#       clearly shows where the model will make wrong (less trustworthy)
+#       predictions
+#     * epistemic uncertainty `f_std` dominates and the aleatoric `y_std -
+#       f_std` vanishes
+
+
+# # Exercise 3
+
+run_example(use_noise=True, use_gap=True)
+
+# ## Observations
+#
+# * `use_noise=True`, `use_gap=True`
+#   * in-distribution (where we have data)
+#     * The epistemic (`f_std`) uncertainty's interpretation is less clear since
+#       `f_std` doesn't correlate well with `y_pred - y_true` as it did in the
+#       noise-free case. The
 #       reason is that the noise $\sigma_n$ shows up in two parts: (a) in the
 #       equation of $\test{\ma\Sigma}$ itself, so the "epistemic" uncertainty
 #       `f_std` = $\sqrt{\diag\test{\ma\Sigma}}$ is bigger just because we have
 #       noise (regression) and (b) we add it in $\sqrt{\diag(\test{\ma\Sigma} +
 #       \sigma_n^2\,\ma I_N)}$ to get the total `y_std`
-#     * The `y_std` plot looks like the `f_std` one, but shifted by a constant.
-#       But this is not the case because we compare standard deviations and not
-#       variances, hence `y_std` - `f_std` is not constant, and in particular
-#       $\neq \sigma_n$, but both are in the same numerical range (0.15 vs. 0.2).
-#   * out-of-distribution: `f_std` (epistemic) dominates
+#   * out-of-distribution
+#     * same as Exercise 2
 
-# # Exercises
-#
-# Go back up, switch on the settings for Exercise 2 and re-run the notebook.
-# Same with Exercise 3.
-
-# # Bonus: plot confidence bands
-
-# +
-y_mean = post_pred_y.mean.reshape((data_pred.nx, data_pred.ny))
-y_std = post_pred_y.stddev.reshape((data_pred.nx, data_pred.ny))
-upper = y_mean + 2 * y_std
-lower = y_mean - 2 * y_std
-
-fig, ax = fig_ax_3d()
-for Z, color in [(upper, "tab:green"), (lower, "tab:red")]:
-    ax.plot_surface(
-        data_pred.XG,
-        data_pred.YG,
-        Z,
-        color=color,
-        alpha=0.5,
-    )
-
-contour_z = lower.min() - 1
-zlim = ax.get_xlim()
-ax.set_zlim((contour_z, zlim[1] + abs(contour_z)))
-ax.contourf(data_pred.XG, data_pred.YG, y_std, zdir="z", offset=contour_z)
-# -
 
 # When running as script
 if not is_interactive():
